@@ -19,33 +19,140 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// Global styles
+// Global styles with magenta theme
 var (
+	// Primary magenta colors
+	primaryMagenta   = lipgloss.Color("#D946EF")  // Main magenta
+	lightMagenta     = lipgloss.Color("#F3E8FF")  // Light magenta background
+	darkMagenta      = lipgloss.Color("#7C2D91")  // Dark magenta
+	accentMagenta    = lipgloss.Color("#A855F7")  // Purple accent
+	
+	// Supporting colors
+	darkGray         = lipgloss.Color("#374151")
+	lightGray        = lipgloss.Color("#9CA3AF")
+	white            = lipgloss.Color("#FFFFFF")
+	successGreen     = lipgloss.Color("#10B981")
+	errorRed         = lipgloss.Color("#EF4444")
+	warningOrange    = lipgloss.Color("#F59E0B")
+
+	// Main title style with gradient-like magenta
 	titleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFDF5")).
-			Background(lipgloss.Color("#25A065")).
+			Foreground(primaryMagenta).
 			Padding(0, 1).
+			Margin(0, 0, 1, 0).
 			Bold(true)
 
+	// Subtitle for sections
+	subtitleStyle = lipgloss.NewStyle().
+			Foreground(darkMagenta).
+			Bold(true).
+			Margin(0, 0, 1, 0)
+
+	// Focused/selected item style
 	focusedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#01BE85")).
-			Background(lipgloss.Color("#00432F")).
+			Foreground(accentMagenta).
+			Padding(0, 1).
+			Bold(true).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(primaryMagenta)
+
+	// Input field styling
+	inputStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(primaryMagenta).
+			Padding(0, 1).
+			Margin(0, 0, 1, 0)
+
+	// Input field when focused
+	inputFocusedStyle = lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(primaryMagenta).
+			Padding(0, 1).
+			Margin(0, 0, 1, 0)
+
+	// Help text style
+	helpStyle = lipgloss.NewStyle().
+			Foreground(lightGray).
+			Italic(true).
+			Margin(1, 0).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lightGray).
 			Padding(0, 1)
 
-	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
-			Margin(1, 0)
+	// Key binding help style
+	keyStyle = lipgloss.NewStyle().
+			Foreground(accentMagenta).
+			Bold(true)
 
+	// Error messages
 	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF5F87")).
-			Bold(true)
+			Foreground(errorRed).
+			Padding(0, 1).
+			Bold(true).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(errorRed)
 
+	// Success messages
 	successStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00FF87")).
-			Bold(true)
+			Foreground(successGreen).
+			Padding(0, 1).
+			Bold(true).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(successGreen)
 
-	docStyle = lipgloss.NewStyle().Margin(1, 2)
+	// Warning messages
+	warningStyle = lipgloss.NewStyle().
+			Foreground(warningOrange).
+			Padding(0, 1).
+			Bold(true).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(warningOrange)
+
+	// Information boxes
+	infoStyle = lipgloss.NewStyle().
+			Foreground(darkMagenta).
+			Padding(1, 2).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(primaryMagenta).
+			Margin(0, 0, 1, 0)
+
+	// Table header style
+	tableHeaderStyle = lipgloss.NewStyle().
+			Foreground(darkMagenta).
+			Bold(true).
+			Padding(0, 1).
+			Align(lipgloss.Center)
+
+	// Main document container
+	docStyle = lipgloss.NewStyle().
+			Margin(2, 2).
+			Padding(1)
+
+	// Card-like container for sections
+	cardStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(accentMagenta).
+			Padding(1, 2).
+			Margin(0, 0, 1, 0)
 )
+
+// Helper function to get magenta-themed table styles
+func getMagentaTableStyles() table.Styles {
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		Foreground(darkMagenta).
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(primaryMagenta).
+		BorderBottom(true).
+		Bold(true).
+		Align(lipgloss.Center)
+	s.Selected = s.Selected.
+		Foreground(accentMagenta).
+		Bold(true)
+	s.Cell = s.Cell.
+		Padding(0, 1)
+	return s
+}
 
 // Application states
 type viewState int
@@ -138,6 +245,7 @@ func initialModel() model {
 	dbList.Title = "🗄️  DBX - Database Explorer"
 	dbList.SetShowStatusBar(false)
 	dbList.SetFilteringEnabled(false)
+	dbList.SetShowHelp(false)
 
 	// Load saved connections
 	savedConnections, _ := loadSavedConnections()
@@ -147,6 +255,7 @@ func initialModel() model {
 	savedConnectionsList.Title = "💾 Saved Connections"
 	savedConnectionsList.SetShowStatusBar(false)
 	savedConnectionsList.SetFilteringEnabled(false)
+	savedConnectionsList.SetShowHelp(false)
 
 	// Populate the list with saved connections
 	savedItems := make([]list.Item, len(savedConnections))
@@ -184,6 +293,9 @@ func initialModel() model {
 	// Tables list
 	tablesList := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
 	tablesList.Title = "📊 Available Tables"
+	tablesList.SetShowStatusBar(false)
+	tablesList.SetFilteringEnabled(false)
+	tablesList.SetShowHelp(false)
 
 	// Columns table
 	columns := []table.Column{
@@ -199,17 +311,7 @@ func initialModel() model {
 		table.WithHeight(10),
 	)
 
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(true)
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("57")).
-		Bold(false)
-	t.SetStyles(s)
+	t.SetStyles(getMagentaTableStyles())
 
 	// Query results table
 	queryResultsTable := table.New(
@@ -217,7 +319,7 @@ func initialModel() model {
 		table.WithFocused(true),
 		table.WithHeight(10),
 	)
-	queryResultsTable.SetStyles(s)
+	queryResultsTable.SetStyles(getMagentaTableStyles())
 
 	// Data preview table
 	dataPreviewTable := table.New(
@@ -225,7 +327,7 @@ func initialModel() model {
 		table.WithFocused(true),
 		table.WithHeight(10),
 	)
-	dataPreviewTable.SetStyles(s)
+	dataPreviewTable.SetStyles(getMagentaTableStyles())
 
 	return model{
 		state:                dbTypeView,
@@ -294,18 +396,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				table.WithFocused(false),
 				table.WithHeight(tableHeight),
 			)
-			// Apply default styles
-			s := table.DefaultStyles()
-			s.Header = s.Header.
-				BorderStyle(lipgloss.NormalBorder()).
-				BorderForeground(lipgloss.Color("240")).
-				BorderBottom(true).
-				Bold(true)
-			s.Selected = s.Selected.
-				Foreground(lipgloss.Color("229")).
-				Background(lipgloss.Color("57")).
-				Bold(false)
-			m.queryResultsTable.SetStyles(s)
+			// Apply magenta theme styles
+			m.queryResultsTable.SetStyles(getMagentaTableStyles())
 		}
 
 	case tea.KeyMsg:
@@ -371,7 +463,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m = m.updateSavedConnectionsList()
 				return m, nil
 			}
-			if (m.state == tablesView || m.state == columnsView) && m.connectionStr != "" {
+			if m.state == columnsView && m.connectionStr != "" {
 				// Go to connection naming view
 				m.state = saveConnectionView
 				m.nameInput.SetValue("")
@@ -679,24 +771,37 @@ func (m model) View() string {
 }
 
 func (m model) dbTypeView() string {
-	content := titleStyle.Render("Select database type") + "\n\n"
-	content += m.dbTypeList.View()
-	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: select • s: saved connections • q: quit")
-	return docStyle.Render(content)
+	// Just use the list with its built-in title, add minimal help below
+	content := m.dbTypeList.View()
+	
+	// Simple help text
+	helpText := helpStyle.Render(
+		keyStyle.Render("enter") + ": select • " +
+		keyStyle.Render("s") + ": saved connections • " +
+		keyStyle.Render("q") + ": quit",
+	)
+	
+	return docStyle.Render(content + "\n" + helpText)
 }
 
 func (m model) savedConnectionsView() string {
-	content := titleStyle.Render("Saved Connections") + "\n\n"
-
+	var content string
+	
 	if len(m.savedConnections) == 0 {
-		content += helpStyle.Render("No saved connections yet.")
+		emptyMsg := infoStyle.Render("📝 No saved connections yet.\n\nGo back and create your first connection!")
+		content = m.savedConnectionsList.View() + "\n" + emptyMsg
 	} else {
-		content += successStyle.Render(fmt.Sprintf("✅ %d connections available", len(m.savedConnections))) + "\n\n"
-		content += m.savedConnectionsList.View()
+		content = m.savedConnectionsList.View()
 	}
-
-	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: connect • e: edit • d: delete • esc: back")
-	return docStyle.Render(content)
+	
+	helpText := helpStyle.Render(
+		keyStyle.Render("enter") + ": connect • " +
+		keyStyle.Render("e") + ": edit • " +
+		keyStyle.Render("d") + ": delete • " +
+		keyStyle.Render("esc") + ": back",
+	)
+	
+	return docStyle.Render(content + "\n" + helpText)
 }
 
 func (m model) saveConnectionView() string {
@@ -738,48 +843,108 @@ func (m model) editConnectionView() string {
 }
 
 func (m model) connectionView() string {
-	content := titleStyle.Render(fmt.Sprintf("Connect to %s", m.selectedDB.name)) + "\n\n"
-
-	if m.err != nil {
-		content += errorStyle.Render("❌ Error: "+m.err.Error()) + "\n\n"
-	}
-
-	if m.queryResult != "" {
-		content += successStyle.Render(m.queryResult) + "\n\n"
-	}
-
-	content += "Connection name:\n"
-	content += m.nameInput.View() + "\n\n"
-
-	content += "Connection string:\n"
-	content += m.textInput.View() + "\n\n"
-
-	content += "Examples:\n"
+	// Database icon based on type
+	var dbIcon string
 	switch m.selectedDB.driver {
 	case "postgres":
-		content += helpStyle.Render("postgres://user:password@localhost/dbname?sslmode=disable")
+		dbIcon = "🐘"
 	case "mysql":
-		content += helpStyle.Render("user:password@tcp(localhost:3306)/dbname")
+		dbIcon = "🐬"
 	case "sqlite3":
-		content += helpStyle.Render("./database.db or /path/to/database.db")
+		dbIcon = "📁"
+	default:
+		dbIcon = "🗄️"
 	}
-
-	content += "\n\n" + helpStyle.Render("F1: test connection • F2: save connection • tab: switch fields • esc: back")
+	
+	title := titleStyle.Render(fmt.Sprintf("%s  Connect to %s", dbIcon, m.selectedDB.name))
+	
+	var messageContent string
+	if m.err != nil {
+		messageContent = errorStyle.Render("❌ " + m.err.Error())
+	} else if m.queryResult != "" {
+		messageContent = successStyle.Render(m.queryResult)
+	}
+	
+	// Input fields with enhanced styling
+	nameLabel := subtitleStyle.Render("Connection Name:")
+	var nameField string
+	if m.nameInput.Focused() {
+		nameField = inputFocusedStyle.Render(m.nameInput.View())
+	} else {
+		nameField = inputStyle.Render(m.nameInput.View())
+	}
+	
+	connLabel := subtitleStyle.Render("Connection String:")
+	var connField string
+	if m.textInput.Focused() {
+		connField = inputFocusedStyle.Render(m.textInput.View())
+	} else {
+		connField = inputStyle.Render(m.textInput.View())
+	}
+	
+	// Examples in an info box
+	var exampleText string
+	switch m.selectedDB.driver {
+	case "postgres":
+		exampleText = "postgres://user:password@localhost/dbname?sslmode=disable"
+	case "mysql":
+		exampleText = "user:password@tcp(localhost:3306)/dbname"
+	case "sqlite3":
+		exampleText = "./database.db or /path/to/database.db"
+	}
+	
+	examples := infoStyle.Render(
+		subtitleStyle.Render("Examples:") + "\n" + exampleText,
+	)
+	
+	// Help text with enhanced key styling
+	helpText := helpStyle.Render(
+		keyStyle.Render("F1") + ": test connection • " +
+		keyStyle.Render("F2") + ": save & connect • " +
+		keyStyle.Render("Tab") + ": switch fields • " +
+		keyStyle.Render("Esc") + ": back",
+	)
+	
+	// Assemble content with proper spacing
+	var elements []string
+	elements = append(elements, title)
+	
+	if messageContent != "" {
+		elements = append(elements, messageContent)
+	}
+	
+	elements = append(elements,
+		nameLabel,
+		nameField,
+		connLabel,
+		connField,
+		examples,
+		helpText,
+	)
+	
+	content := lipgloss.JoinVertical(lipgloss.Left, elements...)
 	return docStyle.Render(content)
 }
 
 func (m model) tablesView() string {
-	content := titleStyle.Render(fmt.Sprintf("Tables in %s", m.selectedDB.name)) + "\n\n"
-
+	var content string
+	
 	if len(m.tables) == 0 {
-		content += helpStyle.Render("No tables found in this database.")
+		emptyMsg := infoStyle.Render("📋 No tables found in this database.\n\nThe database might be empty or you might not have sufficient permissions.")
+		content = m.tablesList.View() + "\n" + emptyMsg
 	} else {
-		content += successStyle.Render(fmt.Sprintf("✅ Connected successfully (%d tables found)", len(m.tables))) + "\n\n"
-		content += m.tablesList.View()
+		statusText := successStyle.Render(fmt.Sprintf("✅ Connected successfully (%d tables found)", len(m.tables)))
+		content = "\n" + statusText + "\n\n" + m.tablesList.View()
 	}
-
-	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: view columns • p: preview data • r: run query • s: save connection • esc: disconnect")
-	return docStyle.Render(content)
+	
+	helpText := helpStyle.Render(
+		keyStyle.Render("enter") + ": view columns • " +
+		keyStyle.Render("p") + ": preview data • " +
+		keyStyle.Render("r") + ": run query • " +
+		keyStyle.Render("esc") + ": disconnect",
+	)
+	
+	return docStyle.Render(content + "\n" + helpText)
 }
 
 func (m model) columnsView() string {
@@ -790,31 +955,70 @@ func (m model) columnsView() string {
 }
 
 func (m model) queryView() string {
-	content := titleStyle.Render("SQL Query") + "\n\n"
-
+	title := titleStyle.Render("⚡  SQL Query Runner")
+	
+	var messageContent string
 	if m.err != nil {
-		content += errorStyle.Render("❌ Error: "+m.err.Error()) + "\n\n"
+		messageContent = errorStyle.Render("❌ " + m.err.Error())
 	}
-
-	content += "Enter SQL query:\n"
-	content += m.queryInput.View() + "\n\n"
-
+	
+	// Query input with enhanced styling
+	queryLabel := subtitleStyle.Render("💻 Enter SQL Query:")
+	var queryField string
+	if m.queryInput.Focused() {
+		queryField = inputFocusedStyle.Render(m.queryInput.View())
+	} else {
+		queryField = inputStyle.Render(m.queryInput.View())
+	}
+	
+	var resultContent string
 	if m.queryResult != "" {
-		content += "Query Result:\n"
-		content += successStyle.Render(m.queryResult) + "\n\n"
-
+		resultLabel := subtitleStyle.Render("📊 Query Result:")
+		resultText := successStyle.Render(m.queryResult)
+		
 		// Only show the table if it has both columns and rows, and they match
 		if len(m.queryResultsTable.Columns()) > 0 && len(m.queryResultsTable.Rows()) > 0 {
-			content += m.queryResultsTable.View() + "\n\n"
+			tableContent := cardStyle.Render(m.queryResultsTable.View())
+			resultContent = lipgloss.JoinVertical(lipgloss.Left, resultLabel, resultText, tableContent)
+		} else {
+			resultContent = lipgloss.JoinVertical(lipgloss.Left, resultLabel, resultText)
 		}
 	}
-
-	content += helpStyle.Render("Examples:") + "\n"
-	content += helpStyle.Render("  SELECT * FROM users LIMIT 10;") + "\n"
-	content += helpStyle.Render("  INSERT INTO users (name, email) VALUES ('John', 'john@example.com');") + "\n"
-	content += helpStyle.Render("  UPDATE users SET email = 'new@example.com' WHERE id = 1;") + "\n"
-	content += helpStyle.Render("  DELETE FROM users WHERE id = 1;")
-	content += "\n\n" + helpStyle.Render("enter: execute query • tab: switch focus • ↑/↓: navigate results • esc: back to tables")
+	
+	// Examples in an info box
+	examples := infoStyle.Render(
+		subtitleStyle.Render("💡 Examples:") + "\n" +
+		keyStyle.Render("SELECT") + " * FROM users LIMIT 10;\n" +
+		keyStyle.Render("INSERT") + " INTO users (name, email) VALUES ('John', 'john@example.com');\n" +
+		keyStyle.Render("UPDATE") + " users SET email = 'new@example.com' WHERE id = 1;\n" +
+		keyStyle.Render("DELETE") + " FROM users WHERE id = 1;",
+	)
+	
+	// Help text with enhanced key styling
+	helpText := helpStyle.Render(
+		keyStyle.Render("Enter") + ": execute query • " +
+		keyStyle.Render("Tab") + ": switch focus • " +
+		keyStyle.Render("↑/↓") + ": navigate results • " +
+		keyStyle.Render("Esc") + ": back to tables",
+	)
+	
+	// Assemble content with proper spacing
+	var elements []string
+	elements = append(elements, title)
+	
+	if messageContent != "" {
+		elements = append(elements, messageContent)
+	}
+	
+	elements = append(elements, queryLabel, queryField)
+	
+	if resultContent != "" {
+		elements = append(elements, resultContent)
+	}
+	
+	elements = append(elements, examples, helpText)
+	
+	content := lipgloss.JoinVertical(lipgloss.Left, elements...)
 	return docStyle.Render(content)
 }
 
@@ -1199,24 +1403,13 @@ func (m model) handleQueryResult(msg queryResult) (model, tea.Cmd) {
 		}
 
 		// Recreate the table with proper initialization to avoid any state issues
-		s := table.DefaultStyles()
-		s.Header = s.Header.
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("240")).
-			BorderBottom(true).
-			Bold(true)
-		s.Selected = s.Selected.
-			Foreground(lipgloss.Color("229")).
-			Background(lipgloss.Color("57")).
-			Bold(false)
-
 		m.queryResultsTable = table.New(
 			table.WithColumns(columns),
 			table.WithRows(rows),
 			table.WithFocused(true),
 			table.WithHeight(10),
 		)
-		m.queryResultsTable.SetStyles(s)
+		m.queryResultsTable.SetStyles(getMagentaTableStyles())
 		
 		m.queryResult = fmt.Sprintf("Query returned %d rows", len(rows))
 		
@@ -1316,24 +1509,13 @@ func (m model) handleDataPreviewResult(msg dataPreviewResult) (model, tea.Cmd) {
 	}
 
 	// Recreate the table with proper initialization to avoid any state issues
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(true)
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("57")).
-		Bold(false)
-
 	m.dataPreviewTable = table.New(
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithFocused(true),
 		table.WithHeight(10),
 	)
-	m.dataPreviewTable.SetStyles(s)
+	m.dataPreviewTable.SetStyles(getMagentaTableStyles())
 
 	return m, nil
 }
