@@ -88,6 +88,8 @@ None currently. The application builds and runs successfully.
 - `n`: Start new database connection
 - `p`: Preview table data (first 10 rows)
 - `r`: Run custom SQL query
+- `F1`: Test database connection (without saving)
+- `F2`: Validate, save and connect to database
 - `Ctrl+E`: Export query results or table preview to CSV
 - `Ctrl+J`: Export query results or table preview to JSON
 - `q` or `Ctrl+C`: Quit application

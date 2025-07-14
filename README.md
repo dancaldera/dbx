@@ -38,7 +38,7 @@ Run the application:
 - **p**: Preview table data (first 10 rows)
 - **r**: Run custom SQL query
 - **F1**: Test database connection (in connection view)
-- **F2**: Save database connection (in connection view)
+- **F2**: Validate, save and connect to database (in connection view)
 - **s**: Save database connection (from tables view)
 - **e**: Edit saved connection (in saved connections view)
 - **d**: Delete saved connection (in saved connections view)
@@ -90,6 +90,27 @@ DBX supports exporting query results and table previews to multiple formats:
 - Query results: `query_result_YYYYMMDD_HHMMSS.csv/json`
 - Table previews: `tablename_YYYYMMDD_HHMMSS.csv/json`
 
+## Connection Validation
+
+DBX includes comprehensive connection validation to ensure reliable database connections:
+
+### Features
+- **Pre-save validation**: Connections are automatically tested before being saved
+- **Enhanced error messages**: Clear, database-specific error descriptions
+- **Connection timeout**: 10-second timeout prevents hanging on unreachable servers
+- **Format validation**: Connection string format is validated for each database type
+
+### Validation Process
+1. **F1 - Test Connection**: Manually test a connection without saving
+2. **F2 - Validate & Save**: Automatically tests connection, then saves if successful
+3. **Real-time feedback**: Loading indicators and clear success/error messages
+4. **Smart error handling**: Database-specific error messages with troubleshooting hints
+
+### Enhanced Error Messages
+- **PostgreSQL**: Server connection, authentication, database existence, and timeout errors
+- **MySQL**: Server connection, access denied, unknown database, and timeout errors  
+- **SQLite**: File existence, permissions, and database lock errors
+
 ## Dependencies
 
 - [Bubble Tea](https://github.com/charmbracelet/bubbletea) - TUI framework
@@ -127,7 +148,7 @@ go vet ./...
 - [x] 3. Result display - Show query results in paginated table format
 - [x] 4. Table data preview - Show sample rows from selected tables
 - [x] 5. Export functionality - Export query results to CSV/JSON
-- [ ] 6. Connection testing - Validate connections before saving
+- [x] 6. Connection testing - Validate connections before saving
 - [ ] 7. Error handling improvements - Better error messages and recovery
 - [ ] 8. Search functionality - Search tables and columns by name
 - [ ] 9. Query history - Save and recall previously executed queries
