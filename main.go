@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -401,6 +403,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleDataPreviewResult(msg)
 	case exportResult:
 		return m.handleExportResult(msg)
+	case testAndSaveResult:
+		return m.handleTestAndSaveResult(msg)
 	case clearResultMsg:
 		m.queryResult = ""
 		return m, nil
@@ -521,26 +525,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "f2":
-			if m.state == connectionView && !m.isSavingConnection && !m.isConnecting {
-				// Save connection directly with both name and connection string
+			if m.state == connectionView && !m.isSavingConnection && !m.isConnecting && !m.isTestingConnection {
+				// Test connection before saving
 				name := m.nameInput.Value()
 				connectionStr := m.textInput.Value()
 				if name != "" && connectionStr != "" {
 					m.isSavingConnection = true
 					m.err = nil
 					m.queryResult = ""
-					newConnection := SavedConnection{
-						Name:          name,
-						Driver:        m.selectedDB.driver,
-						ConnectionStr: connectionStr,
-					}
-					m.savedConnections = append(m.savedConnections, newConnection)
-					saveConnections(m.savedConnections)
-					// Connect to the database and go to tables view
 					m.connectionStr = connectionStr
-					m.isSavingConnection = false
-					m.isConnecting = true
-					return m, m.connectDB()
+					return m, m.testAndSaveConnection(name, connectionStr)
 				}
 			}
 
@@ -680,6 +674,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state = connectionView
 					m.nameInput.SetValue("")
 					m.textInput.SetValue("")
+					m.textInput.Blur()
 					m.nameInput.Focus()
 
 					// Set placeholder according to DB type
@@ -979,7 +974,7 @@ func (m model) connectionView() string {
 	if m.isTestingConnection {
 		messageContent = m.getLoadingText("Testing connection...")
 	} else if m.isSavingConnection {
-		messageContent = m.getLoadingText("Saving connection...")
+		messageContent = m.getLoadingText("Validating and saving connection...")
 	} else if m.isConnecting {
 		messageContent = m.getLoadingText("Connecting to database...")
 	} else if m.err != nil {
@@ -1023,7 +1018,7 @@ func (m model) connectionView() string {
 	// Help text with enhanced key styling
 	helpText := helpStyle.Render(
 		keyStyle.Render("F1") + ": test connection • " +
-		keyStyle.Render("F2") + ": save & connect • " +
+		keyStyle.Render("F2") + ": validate, save & connect • " +
 		keyStyle.Render("Tab") + ": switch fields • " +
 		keyStyle.Render("Esc") + ": back",
 	)
@@ -1184,17 +1179,38 @@ func (m model) dataPreviewView() string {
 // Command to connect to database
 func (m model) testConnection() tea.Cmd {
 	return func() tea.Msg {
-		db, err := sql.Open(m.selectedDB.driver, m.connectionStr)
-		if err != nil {
-			return testConnectionResult{success: false, err: err}
-		}
-		err = db.Ping()
-		db.Close() // Always close the test connection
-		if err != nil {
-			return testConnectionResult{success: false, err: err}
-		}
-		return testConnectionResult{success: true, err: nil}
+		return testConnectionWithTimeout(m.selectedDB.driver, m.connectionStr)
 	}
+}
+
+// Test connection with timeout and better error messages
+func testConnectionWithTimeout(driver, connectionStr string) testConnectionResult {
+	// Basic validation
+	if connectionStr == "" {
+		return testConnectionResult{success: false, err: fmt.Errorf("connection string is empty")}
+	}
+	
+	// Driver-specific validation
+	if err := validateConnectionString(driver, connectionStr); err != nil {
+		return testConnectionResult{success: false, err: err}
+	}
+	
+	db, err := sql.Open(driver, connectionStr)
+	if err != nil {
+		return testConnectionResult{success: false, err: enhanceConnectionError(driver, err)}
+	}
+	defer db.Close()
+	
+	// Set connection timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	err = db.PingContext(ctx)
+	if err != nil {
+		return testConnectionResult{success: false, err: enhanceConnectionError(driver, err)}
+	}
+	
+	return testConnectionResult{success: true, err: nil}
 }
 
 func (m model) connectDB() tea.Cmd {
@@ -1384,6 +1400,13 @@ type exportResult struct {
 	err      error
 }
 
+type testAndSaveResult struct {
+	name       string
+	connection SavedConnection
+	success    bool
+	err        error
+}
+
 // Command to clear query result after timeout
 func clearResultAfterTimeout() tea.Cmd {
 	return tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
@@ -1415,6 +1438,35 @@ func (m model) exportDataToJSON(columns []string, rows [][]string, tableName str
 			format:   "JSON",
 			rowCount: len(rows),
 			err:      err,
+		}
+	}
+}
+
+// Command to test connection and save if successful
+func (m model) testAndSaveConnection(name, connectionStr string) tea.Cmd {
+	return func() tea.Msg {
+		// Test connection first
+		testResult := testConnectionWithTimeout(m.selectedDB.driver, connectionStr)
+		if !testResult.success {
+			return testAndSaveResult{
+				name:    name,
+				success: false,
+				err:     testResult.err,
+			}
+		}
+		
+		// If test successful, save connection
+		newConnection := SavedConnection{
+			Name:          name,
+			Driver:        m.selectedDB.driver,
+			ConnectionStr: connectionStr,
+		}
+		
+		return testAndSaveResult{
+			name:       name,
+			connection: newConnection,
+			success:    true,
+			err:        nil,
 		}
 	}
 }
@@ -1733,6 +1785,34 @@ func (m model) handleExportResult(msg exportResult) (model, tea.Cmd) {
 	return m, tea.Tick(time.Second*5, func(t time.Time) tea.Msg {
 		return clearResultMsg{}
 	})
+}
+
+func (m model) handleTestAndSaveResult(msg testAndSaveResult) (model, tea.Cmd) {
+	m.isSavingConnection = false
+	if !msg.success {
+		m.err = msg.err
+		// Start timeout to clear the error message  
+		return m, tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
+			return clearErrorMsg{}
+		})
+	}
+	
+	// Connection test successful, save and connect
+	m.err = nil
+	m.savedConnections = append(m.savedConnections, msg.connection)
+	saveConnections(m.savedConnections)
+	
+	// Show success message briefly then connect
+	m.queryResult = fmt.Sprintf("✅ Connection validated and saved as '%s'", msg.name)
+	m.isConnecting = true
+	
+	// Connect to the database and go to tables view
+	return m, tea.Batch(
+		tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		}),
+		m.connectDB(),
+	)
 }
 
 // Helper functions for getting database information
@@ -2114,6 +2194,85 @@ func generateExportFilename(tableName, format string) string {
 		return fmt.Sprintf("%s_%s.%s", tableName, timestamp, format)
 	}
 	return fmt.Sprintf("query_result_%s.%s", timestamp, format)
+}
+
+// Validate connection string format for different database types
+func validateConnectionString(driver, connectionStr string) error {
+	switch driver {
+	case "postgres":
+		if !strings.Contains(connectionStr, "://") {
+			return fmt.Errorf("PostgreSQL connection string must use format: postgres://user:password@host:port/database")
+		}
+		if !strings.HasPrefix(connectionStr, "postgres://") && !strings.HasPrefix(connectionStr, "postgresql://") {
+			return fmt.Errorf("PostgreSQL connection string must start with 'postgres://' or 'postgresql://'")
+		}
+	case "mysql":
+		if strings.Contains(connectionStr, "://") {
+			return fmt.Errorf("MySQL connection string must use format: user:password@tcp(host:port)/database")
+		}
+		if !strings.Contains(connectionStr, "@tcp(") {
+			return fmt.Errorf("MySQL connection string must include '@tcp(host:port)' format")
+		}
+	case "sqlite3":
+		if strings.Contains(connectionStr, "://") || strings.Contains(connectionStr, "@") {
+			return fmt.Errorf("SQLite connection string should be a file path: /path/to/database.db")
+		}
+		if connectionStr == ":memory:" {
+			return nil // Special case for in-memory database
+		}
+		// Check if it looks like a valid file path
+		if len(connectionStr) < 1 {
+			return fmt.Errorf("SQLite connection string cannot be empty")
+		}
+	}
+	return nil
+}
+
+// Enhance connection errors with user-friendly messages
+func enhanceConnectionError(driver string, err error) error {
+	errStr := err.Error()
+	
+	switch driver {
+	case "postgres":
+		if strings.Contains(errStr, "connection refused") {
+			return fmt.Errorf("PostgreSQL server is not running or not accepting connections on the specified host/port")
+		}
+		if strings.Contains(errStr, "authentication failed") || strings.Contains(errStr, "password authentication failed") {
+			return fmt.Errorf("PostgreSQL authentication failed - check username and password")
+		}
+		if strings.Contains(errStr, "database") && strings.Contains(errStr, "does not exist") {
+			return fmt.Errorf("PostgreSQL database does not exist - check database name")
+		}
+		if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "context deadline exceeded") {
+			return fmt.Errorf("PostgreSQL connection timeout - check host and port, ensure server is accessible")
+		}
+	case "mysql":
+		if strings.Contains(errStr, "connection refused") {
+			return fmt.Errorf("MySQL server is not running or not accepting connections on the specified host/port")
+		}
+		if strings.Contains(errStr, "Access denied") {
+			return fmt.Errorf("MySQL access denied - check username and password")
+		}
+		if strings.Contains(errStr, "Unknown database") {
+			return fmt.Errorf("MySQL database does not exist - check database name")
+		}
+		if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "context deadline exceeded") {
+			return fmt.Errorf("MySQL connection timeout - check host and port, ensure server is accessible")
+		}
+	case "sqlite3":
+		if strings.Contains(errStr, "no such file") {
+			return fmt.Errorf("SQLite database file does not exist: %s", errStr)
+		}
+		if strings.Contains(errStr, "permission denied") {
+			return fmt.Errorf("SQLite permission denied - check file permissions")
+		}
+		if strings.Contains(errStr, "database is locked") {
+			return fmt.Errorf("SQLite database is locked - close other connections to this file")
+		}
+	}
+	
+	// Return enhanced error with original message for unknown cases
+	return fmt.Errorf("%s connection error: %s", strings.Title(driver), errStr)
 }
 
 func main() {
