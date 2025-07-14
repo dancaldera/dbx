@@ -149,7 +149,7 @@ go vet ./...
 - [x] 4. Table data preview - Show sample rows from selected tables
 - [x] 5. Export functionality - Export query results to CSV/JSON
 - [x] 6. Connection testing - Validate connections before saving
-- [ ] 7. Error handling improvements - Better error messages and recovery
+- [x] 7. Error handling improvements - Better error messages and recovery
 - [ ] 8. Search functionality - Search tables and columns by name
 - [ ] 9. Query history - Save and recall previously executed queries
 

@@ -1269,9 +1269,17 @@ func (m model) loadDataPreview() tea.Cmd {
 		default:
 			query = fmt.Sprintf("SELECT * FROM %s LIMIT 10", m.selectedTable)
 		}
-		rows, err := m.db.Query(query)
+		
+		// Set query timeout for data preview
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		
+		rows, err := m.db.QueryContext(ctx, query)
 		if err != nil {
-			return dataPreviewResult{err: err}
+			if ctx.Err() == context.DeadlineExceeded {
+				return dataPreviewResult{err: fmt.Errorf("data preview timeout: operation took longer than 15 seconds")}
+			}
+			return dataPreviewResult{err: enhanceQueryError(err)}
 		}
 		defer rows.Close()
 
@@ -1316,9 +1324,17 @@ func (m model) loadDataPreview() tea.Cmd {
 // Command to execute query
 func (m model) executeQuery(query string) tea.Cmd {
 	return func() tea.Msg {
-		rows, err := m.db.Query(query)
+		// Set query timeout to prevent hanging
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		
+		rows, err := m.db.QueryContext(ctx, query)
 		if err != nil {
-			return queryResult{err: err}
+			// Enhanced error handling for query execution
+			if ctx.Err() == context.DeadlineExceeded {
+				return queryResult{err: fmt.Errorf("query timeout: operation took longer than 30 seconds")}
+			}
+			return queryResult{err: enhanceQueryError(err)}
 		}
 		defer rows.Close()
 
@@ -1474,11 +1490,7 @@ func (m model) testAndSaveConnection(name, connectionStr string) tea.Cmd {
 // Implement Update to handle results
 func (m model) handleConnectResult(msg connectResult) (model, tea.Cmd) {
 	if msg.err != nil {
-		m.err = msg.err
-		// Start timeout to clear the error message
-		return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
-			return clearErrorMsg{}
-		})
+		return m.handleErrorWithRecovery(msg.err, 3)
 	}
 
 	m.isConnecting = false
@@ -1505,11 +1517,7 @@ func (m model) handleConnectResult(msg connectResult) (model, tea.Cmd) {
 func (m model) handleTestConnectionResult(msg testConnectionResult) (model, tea.Cmd) {
 	m.isTestingConnection = false
 	if msg.err != nil {
-		m.err = msg.err
-		// Start timeout to clear the error message
-		return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
-			return clearErrorMsg{}
-		})
+		return m.handleErrorWithRecovery(msg.err, 3)
 	}
 	// Clear any previous error and show success message temporarily
 	m.err = nil
@@ -1523,11 +1531,7 @@ func (m model) handleTestConnectionResult(msg testConnectionResult) (model, tea.
 func (m model) handleColumnsResult(msg columnsResult) (model, tea.Cmd) {
 	m.isLoadingColumns = false
 	if msg.err != nil {
-		m.err = msg.err
-		// Start timeout to clear the error message
-		return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
-			return clearErrorMsg{}
-		})
+		return m.handleErrorWithRecovery(msg.err, 3)
 	}
 
 	m.err = nil
@@ -1546,11 +1550,7 @@ func (m model) handleColumnsResult(msg columnsResult) (model, tea.Cmd) {
 func (m model) handleQueryResult(msg queryResult) (model, tea.Cmd) {
 	m.isExecutingQuery = false
 	if msg.err != nil {
-		m.err = msg.err
-		// Start timeout to clear the error message
-		return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
-			return clearErrorMsg{}
-		})
+		return m.handleErrorWithRecovery(msg.err, 3)
 	}
 
 	m.err = nil
@@ -1660,11 +1660,7 @@ func (m model) handleQueryResult(msg queryResult) (model, tea.Cmd) {
 func (m model) handleDataPreviewResult(msg dataPreviewResult) (model, tea.Cmd) {
 	m.isLoadingPreview = false
 	if msg.err != nil {
-		m.err = msg.err
-		// Start timeout to clear the error message
-		return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
-			return clearErrorMsg{}
-		})
+		return m.handleErrorWithRecovery(msg.err, 3)
 	}
 
 	m.err = nil
@@ -1790,11 +1786,7 @@ func (m model) handleExportResult(msg exportResult) (model, tea.Cmd) {
 func (m model) handleTestAndSaveResult(msg testAndSaveResult) (model, tea.Cmd) {
 	m.isSavingConnection = false
 	if !msg.success {
-		m.err = msg.err
-		// Start timeout to clear the error message  
-		return m, tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
-			return clearErrorMsg{}
-		})
+		return m.handleErrorWithRecovery(msg.err, 3)
 	}
 	
 	// Connection test successful, save and connect
@@ -2224,7 +2216,53 @@ func validateConnectionString(driver, connectionStr string) error {
 		if len(connectionStr) < 1 {
 			return fmt.Errorf("SQLite connection string cannot be empty")
 		}
+		
+		// Enhanced SQLite validation
+		if err := validateSQLiteConnection(connectionStr); err != nil {
+			return err
+		}
 	}
+	return nil
+}
+
+// Enhanced validation for SQLite connections
+func validateSQLiteConnection(path string) error {
+	if path == ":memory:" {
+		return nil
+	}
+	
+	// Clean the path
+	path = filepath.Clean(path)
+	
+	// Check if path is a directory
+	if info, err := os.Stat(path); err == nil {
+		if info.IsDir() {
+			return fmt.Errorf("path is a directory, not a database file: %s", path)
+		}
+		// File exists, check if it's readable
+		if file, err := os.Open(path); err != nil {
+			return fmt.Errorf("cannot read database file: %s", err.Error())
+		} else {
+			file.Close()
+		}
+		return nil
+	}
+	
+	// File doesn't exist, check if parent directory exists and is writable
+	dir := filepath.Dir(path)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return fmt.Errorf("directory does not exist: %s", dir)
+	}
+	
+	// Check if we can create the file (for write permissions)
+	testFile := filepath.Join(dir, ".dbx_write_test")
+	if file, err := os.Create(testFile); err != nil {
+		return fmt.Errorf("cannot write to directory: %s", dir)
+	} else {
+		file.Close()
+		os.Remove(testFile) // Clean up test file
+	}
+	
 	return nil
 }
 
@@ -2273,6 +2311,58 @@ func enhanceConnectionError(driver string, err error) error {
 	
 	// Return enhanced error with original message for unknown cases
 	return fmt.Errorf("%s connection error: %s", strings.Title(driver), errStr)
+}
+
+// Enhance query execution errors with user-friendly messages
+func enhanceQueryError(err error) error {
+	errStr := err.Error()
+	
+	// Common SQL error patterns
+	if strings.Contains(errStr, "syntax error") {
+		return fmt.Errorf("SQL syntax error: %s", errStr)
+	}
+	if strings.Contains(errStr, "no such table") || strings.Contains(errStr, "doesn't exist") {
+		return fmt.Errorf("table or column does not exist: %s", errStr)
+	}
+	if strings.Contains(errStr, "permission denied") || strings.Contains(errStr, "access denied") {
+		return fmt.Errorf("insufficient permissions: %s", errStr)
+	}
+	if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "context deadline exceeded") {
+		return fmt.Errorf("query timeout - operation took too long to complete")
+	}
+	if strings.Contains(errStr, "connection") && strings.Contains(errStr, "lost") {
+		return fmt.Errorf("database connection lost - please reconnect")
+	}
+	if strings.Contains(errStr, "deadlock") {
+		return fmt.Errorf("database deadlock detected - try again")
+	}
+	
+	// Return original error if no enhancement available
+	return err
+}
+
+// Reset all loading states to prevent stuck UI states
+func (m model) resetLoadingStates() model {
+	m.isConnecting = false
+	m.isTestingConnection = false
+	m.isExecutingQuery = false
+	m.isLoadingColumns = false
+	m.isLoadingPreview = false
+	m.isExporting = false
+	m.isSavingConnection = false
+	return m
+}
+
+// Enhanced error handling with automatic loading state recovery
+func (m model) handleErrorWithRecovery(err error, timeoutSeconds int) (model, tea.Cmd) {
+	// Reset any stuck loading states
+	m = m.resetLoadingStates()
+	
+	// Set error and start timeout to clear it
+	m.err = err
+	return m, tea.Tick(time.Duration(timeoutSeconds)*time.Second, func(t time.Time) tea.Msg {
+		return clearErrorMsg{}
+	})
 }
 
 func main() {
