@@ -18,7 +18,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// Estilos globales
+// Global styles
 var (
 	titleStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFDF5")).
@@ -46,7 +46,7 @@ var (
 	docStyle = lipgloss.NewStyle().Margin(1, 2)
 )
 
-// Estados de la aplicación
+// Application states
 type viewState int
 
 const (
@@ -58,14 +58,14 @@ const (
 	columnsView
 )
 
-// Conexión guardada
+// Saved connection
 type SavedConnection struct {
 	Name          string `json:"name"`
 	Driver        string `json:"driver"`
 	ConnectionStr string `json:"connection_str"`
 }
 
-// Tipos de base de datos
+// Database types
 type dbType struct {
 	name   string
 	driver string
@@ -77,7 +77,7 @@ var dbTypes = []dbType{
 	{"SQLite", "sqlite3"},
 }
 
-// Item para la lista
+// List item
 type item struct {
 	title, desc string
 }
@@ -86,7 +86,7 @@ func (i item) Title() string       { return i.title }
 func (i item) Description() string { return i.desc }
 func (i item) FilterValue() string { return i.title }
 
-// Modelo principal
+// Main model
 type model struct {
 	state               viewState
 	dbTypeList          list.Model
@@ -107,12 +107,12 @@ type model struct {
 }
 
 func initialModel() model {
-	// Lista de tipos de base de datos
+	// Database types list
 	items := make([]list.Item, len(dbTypes))
 	for i, db := range dbTypes {
 		items[i] = item{
 			title: db.name,
-			desc:  fmt.Sprintf("Conectar a base de datos %s", db.name),
+			desc:  fmt.Sprintf("Connect to %s database", db.name),
 		}
 	}
 
@@ -121,16 +121,16 @@ func initialModel() model {
 	dbList.SetShowStatusBar(false)
 	dbList.SetFilteringEnabled(false)
 
-	// Cargar conexiones guardadas
+	// Load saved connections
 	savedConnections, _ := loadSavedConnections()
 	
-	// Lista de conexiones guardadas
+	// Saved connections list
 	savedConnectionsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
-	savedConnectionsList.Title = "💾 Conexiones Guardadas"
+	savedConnectionsList.Title = "💾 Saved Connections"
 	savedConnectionsList.SetShowStatusBar(false)
 	savedConnectionsList.SetFilteringEnabled(false)
 	
-	// Poblar la lista con las conexiones guardadas
+	// Populate the list with saved connections
 	savedItems := make([]list.Item, len(savedConnections))
 	for i, conn := range savedConnections {
 		connStr := conn.ConnectionStr
@@ -144,28 +144,28 @@ func initialModel() model {
 	}
 	savedConnectionsList.SetItems(savedItems)
 
-	// Input de conexión
+	// Connection input
 	ti := textinput.New()
-	ti.Placeholder = "Ingresa la cadena de conexión..."
+	ti.Placeholder = "Enter connection string..."
 	ti.Focus()
 	ti.CharLimit = 500
 	ti.Width = 80
 
-	// Input para nombre de conexión
+	// Connection name input
 	ni := textinput.New()
-	ni.Placeholder = "Nombre para esta conexión..."
+	ni.Placeholder = "Name for this connection..."
 	ni.CharLimit = 100
 	ni.Width = 80
 
-	// Lista de tablas
+	// Tables list
 	tablesList := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
-	tablesList.Title = "📊 Tablas disponibles"
+	tablesList.Title = "📊 Available Tables"
 
-	// Tabla de columnas
+	// Columns table
 	columns := []table.Column{
-		{Title: "Columna", Width: 20},
-		{Title: "Tipo", Width: 15},
-		{Title: "Nulo", Width: 8},
+		{Title: "Column", Width: 20},
+		{Title: "Type", Width: 15},
+		{Title: "Null", Width: 8},
 		{Title: "Default", Width: 15},
 	}
 
@@ -251,7 +251,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "s":
 			if m.state == dbTypeView {
 				m.state = savedConnectionsView
-				// Recargar conexiones desde archivo
+				// Reload connections from file
 				if connections, err := loadSavedConnections(); err == nil {
 					m.savedConnections = connections
 				}
@@ -259,7 +259,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if (m.state == connectionView || m.state == tablesView || m.state == columnsView) && m.connectionStr != "" {
-				// Ir a la vista de nombrar conexión
+				// Go to connection naming view
 				m.state = saveConnectionView
 				m.nameInput.SetValue("")
 				m.nameInput.Focus()
@@ -293,7 +293,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textInput.SetValue("")
 					m.textInput.Focus()
 
-					// Establecer placeholder según el tipo de DB
+					// Set placeholder according to DB type
 					switch m.selectedDB.driver {
 					case "postgres":
 						m.textInput.Placeholder = "postgres://user:password@localhost/dbname?sslmode=disable"
@@ -306,10 +306,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case savedConnectionsView:
 				if i, ok := m.savedConnectionsList.SelectedItem().(item); ok {
-					// Buscar la conexión guardada por nombre
+					// Find saved connection by name
 					for _, conn := range m.savedConnections {
 						if conn.Name == i.title {
-							// Establecer el tipo de DB basado en el driver
+							// Set DB type based on driver
 							for _, db := range dbTypes {
 								if db.driver == conn.Driver {
 									m.selectedDB = db
@@ -331,7 +331,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case saveConnectionView:
 				name := m.nameInput.Value()
 				if name != "" {
-					// Guardar conexión con el nombre proporcionado
+					// Save connection with provided name
 					newConnection := SavedConnection{
 						Name:          name,
 						Driver:        m.selectedDB.driver,
@@ -352,7 +352,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Actualizar componentes según el estado
+	// Update components according to state
 	switch m.state {
 	case dbTypeView:
 		m.dbTypeList, cmd = m.dbTypeList.Update(msg)
@@ -390,82 +390,82 @@ func (m model) View() string {
 }
 
 func (m model) dbTypeView() string {
-	content := titleStyle.Render("Selecciona el tipo de base de datos") + "\n\n"
+	content := titleStyle.Render("Select database type") + "\n\n"
 	content += m.dbTypeList.View()
-	content += "\n" + helpStyle.Render("↑/↓: navegar • enter: seleccionar • s: conexiones guardadas • q: salir")
+	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: select • s: saved connections • q: quit")
 	return docStyle.Render(content)
 }
 
 func (m model) savedConnectionsView() string {
-	content := titleStyle.Render("Conexiones Guardadas") + "\n\n"
+	content := titleStyle.Render("Saved Connections") + "\n\n"
 	
 	if len(m.savedConnections) == 0 {
-		content += helpStyle.Render("No hay conexiones guardadas aún.")
+		content += helpStyle.Render("No saved connections yet.")
 	} else {
-		content += successStyle.Render(fmt.Sprintf("✅ %d conexiones disponibles", len(m.savedConnections))) + "\n\n"
+		content += successStyle.Render(fmt.Sprintf("✅ %d connections available", len(m.savedConnections))) + "\n\n"
 		content += m.savedConnectionsList.View()
 	}
 	
-	content += "\n" + helpStyle.Render("↑/↓: navegar • enter: conectar • esc: volver • q: salir")
+	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: connect • esc: back • q: quit")
 	return docStyle.Render(content)
 }
 
 func (m model) saveConnectionView() string {
-	content := titleStyle.Render("Guardar Conexión") + "\n\n"
-	content += "Nombre para esta conexión:\n"
+	content := titleStyle.Render("Save Connection") + "\n\n"
+	content += "Name for this connection:\n"
 	content += m.nameInput.View() + "\n\n"
-	content += "Conexión a guardar:\n"
+	content += "Connection to save:\n"
 	content += helpStyle.Render(fmt.Sprintf("%s: %s", m.selectedDB.name, m.connectionStr))
-	content += "\n\n" + helpStyle.Render("enter: guardar • esc: cancelar • q: salir")
+	content += "\n\n" + helpStyle.Render("enter: save • esc: cancel • q: quit")
 	return docStyle.Render(content)
 }
 
 func (m model) connectionView() string {
-	content := titleStyle.Render(fmt.Sprintf("Conectar a %s", m.selectedDB.name)) + "\n\n"
+	content := titleStyle.Render(fmt.Sprintf("Connect to %s", m.selectedDB.name)) + "\n\n"
 
 	if m.err != nil {
 		content += errorStyle.Render("❌ Error: "+m.err.Error()) + "\n\n"
 	}
 
-	content += "Cadena de conexión:\n"
+	content += "Connection string:\n"
 	content += m.textInput.View() + "\n\n"
 
-	content += "Ejemplos:\n"
+	content += "Examples:\n"
 	switch m.selectedDB.driver {
 	case "postgres":
 		content += helpStyle.Render("postgres://user:password@localhost/dbname?sslmode=disable")
 	case "mysql":
 		content += helpStyle.Render("user:password@tcp(localhost:3306)/dbname")
 	case "sqlite3":
-		content += helpStyle.Render("./database.db o /path/to/database.db")
+		content += helpStyle.Render("./database.db or /path/to/database.db")
 	}
 
-	content += "\n\n" + helpStyle.Render("enter: conectar • s: nombrar y guardar conexión • esc: volver • q: salir")
+	content += "\n\n" + helpStyle.Render("enter: connect • s: name and save connection • esc: back • q: quit")
 	return docStyle.Render(content)
 }
 
 func (m model) tablesView() string {
-	content := titleStyle.Render(fmt.Sprintf("Tablas en %s", m.selectedDB.name)) + "\n\n"
+	content := titleStyle.Render(fmt.Sprintf("Tables in %s", m.selectedDB.name)) + "\n\n"
 
 	if len(m.tables) == 0 {
-		content += helpStyle.Render("No se encontraron tablas en esta base de datos.")
+		content += helpStyle.Render("No tables found in this database.")
 	} else {
-		content += successStyle.Render(fmt.Sprintf("✅ Conectado exitosamente (%d tablas encontradas)", len(m.tables))) + "\n\n"
+		content += successStyle.Render(fmt.Sprintf("✅ Connected successfully (%d tables found)", len(m.tables))) + "\n\n"
 		content += m.tablesList.View()
 	}
 
-	content += "\n" + helpStyle.Render("↑/↓: navegar • enter: ver columnas • s: guardar conexión • n: nueva conexión • esc: volver • q: salir")
+	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: view columns • s: save connection • n: new connection • esc: back • q: quit")
 	return docStyle.Render(content)
 }
 
 func (m model) columnsView() string {
-	content := titleStyle.Render(fmt.Sprintf("Columnas de la tabla: %s", m.selectedTable)) + "\n\n"
+	content := titleStyle.Render(fmt.Sprintf("Columns of table: %s", m.selectedTable)) + "\n\n"
 	content += m.columnsTable.View()
-	content += "\n" + helpStyle.Render("↑/↓: navegar • s: guardar conexión • n: nueva conexión • esc: volver a tablas • q: salir")
+	content += "\n" + helpStyle.Render("↑/↓: navigate • s: save connection • n: new connection • esc: back to tables • q: quit")
 	return docStyle.Render(content)
 }
 
-// Comando para conectar a la base de datos
+// Command to connect to database
 func (m model) connectDB() tea.Cmd {
 	return func() tea.Msg {
 		db, err := sql.Open(m.selectedDB.driver, m.connectionStr)
@@ -479,7 +479,7 @@ func (m model) connectDB() tea.Cmd {
 			return connectResult{err: err}
 		}
 
-		// Obtener lista de tablas
+		// Get tables list
 		tables, err := getTables(db, m.selectedDB.driver)
 		if err != nil {
 			db.Close()
@@ -490,7 +490,7 @@ func (m model) connectDB() tea.Cmd {
 	}
 }
 
-// Comando para cargar columnas
+// Command to load columns
 func (m model) loadColumns() tea.Cmd {
 	return func() tea.Msg {
 		columns, err := getColumns(m.db, m.selectedDB.driver, m.selectedTable)
@@ -513,7 +513,7 @@ type columnsResult struct {
 	err     error
 }
 
-// Implementar Update para manejar resultados
+// Implement Update to handle results
 func (m model) handleConnectResult(msg connectResult) (model, tea.Cmd) {
 	if msg.err != nil {
 		m.err = msg.err
@@ -525,7 +525,7 @@ func (m model) handleConnectResult(msg connectResult) (model, tea.Cmd) {
 	m.err = nil
 	m.state = tablesView
 
-	// Crear items para la lista de tablas
+	// Create items for tables list
 	items := make([]list.Item, len(msg.tables))
 	for i, table := range msg.tables {
 		items[i] = item{
@@ -547,7 +547,7 @@ func (m model) handleColumnsResult(msg columnsResult) (model, tea.Cmd) {
 	m.err = nil
 	m.state = columnsView
 
-	// Convertir a filas de tabla
+	// Convert to table rows
 	rows := make([]table.Row, len(msg.columns))
 	for i, col := range msg.columns {
 		rows[i] = table.Row(col)
@@ -558,7 +558,7 @@ func (m model) handleColumnsResult(msg columnsResult) (model, tea.Cmd) {
 }
 
 
-// Funciones auxiliares para obtener información de la DB
+// Helper functions for getting database information
 
 func getTables(db *sql.DB, driver string) ([]string, error) {
 	var query string
@@ -658,11 +658,11 @@ func getColumns(db *sql.DB, driver, tableName string) ([][]string, error) {
 	return columns, nil
 }
 
-// Método para actualizar la lista de conexiones guardadas
+// Method to update saved connections list
 func (m model) updateSavedConnectionsList() model {
 	items := make([]list.Item, len(m.savedConnections))
 	for i, conn := range m.savedConnections {
-		// Truncar la cadena de conexión de forma segura
+		// Safely truncate connection string
 		connStr := conn.ConnectionStr
 		if len(connStr) > 50 {
 			connStr = connStr[:50] + "..."
@@ -678,7 +678,7 @@ func (m model) updateSavedConnectionsList() model {
 }
 
 
-// Funciones para manejo de conexiones guardadas
+// Functions for saved connections management
 
 func getConfigDir() (string, error) {
 	homeDir, err := os.UserHomeDir()

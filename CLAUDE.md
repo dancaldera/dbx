@@ -71,7 +71,7 @@ go test ./...
 
 ## Known Issues
 
-The project currently has unused imports (`os` and `strings` in main.go:7-8) that prevent compilation. These need to be removed or used before the application can run.
+None currently. The application builds and runs successfully.
 
 ## Database Connection Examples
 
