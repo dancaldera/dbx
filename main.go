@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/table"
@@ -56,6 +57,7 @@ const (
 	saveConnectionView
 	tablesView
 	columnsView
+	queryView
 )
 
 // Saved connection
@@ -88,22 +90,25 @@ func (i item) FilterValue() string { return i.title }
 
 // Main model
 type model struct {
-	state               viewState
-	dbTypeList          list.Model
+	state                viewState
+	dbTypeList           list.Model
 	savedConnectionsList list.Model
-	textInput           textinput.Model
-	nameInput           textinput.Model
-	tablesList          list.Model
-	columnsTable        table.Model
-	selectedDB          dbType
-	connectionStr       string
-	db                  *sql.DB
-	err                 error
-	tables              []string
-	selectedTable       string
-	savedConnections    []SavedConnection
-	width               int
-	height              int
+	textInput            textinput.Model
+	nameInput            textinput.Model
+	queryInput           textinput.Model
+	tablesList           list.Model
+	columnsTable         table.Model
+	queryResultsTable    table.Model
+	selectedDB           dbType
+	connectionStr        string
+	db                   *sql.DB
+	err                  error
+	tables               []string
+	selectedTable        string
+	savedConnections     []SavedConnection
+	queryResult          string
+	width                int
+	height               int
 }
 
 func initialModel() model {
@@ -123,13 +128,13 @@ func initialModel() model {
 
 	// Load saved connections
 	savedConnections, _ := loadSavedConnections()
-	
+
 	// Saved connections list
 	savedConnectionsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
 	savedConnectionsList.Title = "💾 Saved Connections"
 	savedConnectionsList.SetShowStatusBar(false)
 	savedConnectionsList.SetFilteringEnabled(false)
-	
+
 	// Populate the list with saved connections
 	savedItems := make([]list.Item, len(savedConnections))
 	for i, conn := range savedConnections {
@@ -156,6 +161,12 @@ func initialModel() model {
 	ni.Placeholder = "Name for this connection..."
 	ni.CharLimit = 100
 	ni.Width = 80
+
+	// Query input
+	qi := textinput.New()
+	qi.Placeholder = "Enter SQL query (e.g., SELECT * FROM table_name LIMIT 10)..."
+	qi.CharLimit = 1000
+	qi.Width = 80
 
 	// Tables list
 	tablesList := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
@@ -187,15 +198,25 @@ func initialModel() model {
 		Bold(false)
 	t.SetStyles(s)
 
+	// Query results table
+	queryResultsTable := table.New(
+		table.WithColumns([]table.Column{}),
+		table.WithFocused(true),
+		table.WithHeight(10),
+	)
+	queryResultsTable.SetStyles(s)
+
 	return model{
-		state:               dbTypeView,
-		dbTypeList:          dbList,
+		state:                dbTypeView,
+		dbTypeList:           dbList,
 		savedConnectionsList: savedConnectionsList,
-		textInput:           ti,
-		nameInput:           ni,
-		tablesList:          tablesList,
-		columnsTable:        t,
-		savedConnections:    savedConnections,
+		textInput:            ti,
+		nameInput:            ni,
+		queryInput:           qi,
+		tablesList:           tablesList,
+		columnsTable:         t,
+		queryResultsTable:    queryResultsTable,
+		savedConnections:     savedConnections,
 	}
 }
 
@@ -212,6 +233,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleConnectResult(msg)
 	case columnsResult:
 		return m.handleColumnsResult(msg)
+	case queryResult:
+		return m.handleQueryResult(msg)
+	case clearResultMsg:
+		m.queryResult = ""
+		return m, nil
+	case clearErrorMsg:
+		m.err = nil
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -221,14 +250,53 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tablesList.SetSize(msg.Width-h, msg.Height-v-5)
 		m.textInput.Width = msg.Width - h - 4
 		m.nameInput.Width = msg.Width - h - 4
+		m.queryInput.Width = msg.Width - h - 4
+
+		// Update query results table height
+		tableHeight := msg.Height - v - 15 // Reserve space for query input and help text
+		if tableHeight < 5 {
+			tableHeight = 5
+		}
+		// Simply adjust the height for the existing table
+		if len(m.queryResultsTable.Columns()) > 0 {
+			cols := m.queryResultsTable.Columns()
+			rows := m.queryResultsTable.Rows()
+			m.queryResultsTable = table.New(
+				table.WithColumns(cols),
+				table.WithRows(rows),
+				table.WithFocused(false),
+				table.WithHeight(tableHeight),
+			)
+			// Apply default styles
+			s := table.DefaultStyles()
+			s.Header = s.Header.
+				BorderStyle(lipgloss.NormalBorder()).
+				BorderForeground(lipgloss.Color("240")).
+				BorderBottom(true).
+				Bold(true)
+			s.Selected = s.Selected.
+				Foreground(lipgloss.Color("229")).
+				Background(lipgloss.Color("57")).
+				Bold(false)
+			m.queryResultsTable.SetStyles(s)
+		}
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "ctrl+c":
 			if m.db != nil {
 				m.db.Close()
 			}
 			return m, tea.Quit
+
+		case "q":
+			// Only allow quit from main database type view
+			if m.state == dbTypeView {
+				if m.db != nil {
+					m.db.Close()
+				}
+				return m, tea.Quit
+			}
 
 		case "esc":
 			switch m.state {
@@ -244,6 +312,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tablesView:
 				m.state = connectionView
 			case columnsView:
+				m.state = tablesView
+			case queryView:
 				m.state = tablesView
 			}
 			return m, nil
@@ -266,18 +336,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-		case "n":
-			if m.state == tablesView || m.state == columnsView {
-				if m.db != nil {
-					m.db.Close()
-				}
-				m.state = dbTypeView
-				m.err = nil
-				m.connectionStr = ""
-				m.tables = nil
-				m.selectedTable = ""
+		case "r":
+			if (m.state == tablesView || m.state == columnsView) && m.db != nil {
+				// Go to query view
+				m.state = queryView
+				m.queryInput.SetValue("")
+				m.queryInput.Focus()
+				m.queryResultsTable.Blur()
+				return m, nil
 			}
-			return m, nil
 
 		case "enter":
 			switch m.state {
@@ -348,6 +415,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedTable = i.title
 					return m, m.loadColumns()
 				}
+
+			case queryView:
+				query := m.queryInput.Value()
+				if query != "" {
+					return m, m.executeQuery(query)
+				}
 			}
 		}
 	}
@@ -362,6 +435,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textInput, cmd = m.textInput.Update(msg)
 	case saveConnectionView:
 		m.nameInput, cmd = m.nameInput.Update(msg)
+	case queryView:
+		// Handle focus between query input and results table
+		if msg, ok := msg.(tea.KeyMsg); ok {
+			switch msg.String() {
+			case "tab":
+				// Toggle focus between input and table
+				if m.queryInput.Focused() && len(m.queryResultsTable.Rows()) > 0 {
+					m.queryInput.Blur()
+					m.queryResultsTable.Focus()
+				} else if len(m.queryResultsTable.Rows()) > 0 {
+					m.queryResultsTable.Blur()
+					m.queryInput.Focus()
+				}
+				return m, nil
+			case "up", "down", "j", "k":
+				// If table has focus, let it handle navigation
+				if len(m.queryResultsTable.Rows()) > 0 && !m.queryInput.Focused() {
+					m.queryResultsTable, cmd = m.queryResultsTable.Update(msg)
+					return m, cmd
+				}
+			}
+		}
+
+		// Update query input if it has focus or no table results
+		if m.queryInput.Focused() || len(m.queryResultsTable.Rows()) == 0 {
+			m.queryInput, cmd = m.queryInput.Update(msg)
+		}
 	case tablesView:
 		m.tablesList, cmd = m.tablesList.Update(msg)
 	case columnsView:
@@ -385,6 +485,8 @@ func (m model) View() string {
 		return m.tablesView()
 	case columnsView:
 		return m.columnsView()
+	case queryView:
+		return m.queryView()
 	}
 	return ""
 }
@@ -398,15 +500,15 @@ func (m model) dbTypeView() string {
 
 func (m model) savedConnectionsView() string {
 	content := titleStyle.Render("Saved Connections") + "\n\n"
-	
+
 	if len(m.savedConnections) == 0 {
 		content += helpStyle.Render("No saved connections yet.")
 	} else {
 		content += successStyle.Render(fmt.Sprintf("✅ %d connections available", len(m.savedConnections))) + "\n\n"
 		content += m.savedConnectionsList.View()
 	}
-	
-	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: connect • esc: back • q: quit")
+
+	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: connect • esc: back")
 	return docStyle.Render(content)
 }
 
@@ -416,7 +518,7 @@ func (m model) saveConnectionView() string {
 	content += m.nameInput.View() + "\n\n"
 	content += "Connection to save:\n"
 	content += helpStyle.Render(fmt.Sprintf("%s: %s", m.selectedDB.name, m.connectionStr))
-	content += "\n\n" + helpStyle.Render("enter: save • esc: cancel • q: quit")
+	content += "\n\n" + helpStyle.Render("enter: save • esc: cancel")
 	return docStyle.Render(content)
 }
 
@@ -440,7 +542,7 @@ func (m model) connectionView() string {
 		content += helpStyle.Render("./database.db or /path/to/database.db")
 	}
 
-	content += "\n\n" + helpStyle.Render("enter: connect • s: name and save connection • esc: back • q: quit")
+	content += "\n\n" + helpStyle.Render("enter: connect • s: name and save connection • esc: back")
 	return docStyle.Render(content)
 }
 
@@ -454,14 +556,43 @@ func (m model) tablesView() string {
 		content += m.tablesList.View()
 	}
 
-	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: view columns • s: save connection • n: new connection • esc: back • q: quit")
+	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: view columns • r: run query • s: save connection • esc: back")
 	return docStyle.Render(content)
 }
 
 func (m model) columnsView() string {
 	content := titleStyle.Render(fmt.Sprintf("Columns of table: %s", m.selectedTable)) + "\n\n"
 	content += m.columnsTable.View()
-	content += "\n" + helpStyle.Render("↑/↓: navigate • s: save connection • n: new connection • esc: back to tables • q: quit")
+	content += "\n" + helpStyle.Render("↑/↓: navigate • r: run query • s: save connection • esc: back to tables")
+	return docStyle.Render(content)
+}
+
+func (m model) queryView() string {
+	content := titleStyle.Render("SQL Query") + "\n\n"
+
+	if m.err != nil {
+		content += errorStyle.Render("❌ Error: "+m.err.Error()) + "\n\n"
+	}
+
+	content += "Enter SQL query:\n"
+	content += m.queryInput.View() + "\n\n"
+
+	if m.queryResult != "" {
+		content += "Query Result:\n"
+		content += successStyle.Render(m.queryResult) + "\n\n"
+
+		// Show the table if there are results
+		if len(m.queryResultsTable.Rows()) > 0 {
+			content += m.queryResultsTable.View() + "\n\n"
+		}
+	}
+
+	content += helpStyle.Render("Examples:") + "\n"
+	content += helpStyle.Render("  SELECT * FROM users LIMIT 10;") + "\n"
+	content += helpStyle.Render("  INSERT INTO users (name, email) VALUES ('John', 'john@example.com');") + "\n"
+	content += helpStyle.Render("  UPDATE users SET email = 'new@example.com' WHERE id = 1;") + "\n"
+	content += helpStyle.Render("  DELETE FROM users WHERE id = 1;")
+	content += "\n\n" + helpStyle.Render("enter: execute query • tab: switch focus • ↑/↓: navigate results • esc: back to tables")
 	return docStyle.Render(content)
 }
 
@@ -501,7 +632,54 @@ func (m model) loadColumns() tea.Cmd {
 	}
 }
 
-// Mensajes de resultado
+// Command to execute query
+func (m model) executeQuery(query string) tea.Cmd {
+	return func() tea.Msg {
+		rows, err := m.db.Query(query)
+		if err != nil {
+			return queryResult{err: err}
+		}
+		defer rows.Close()
+
+		// Get column names
+		columns, err := rows.Columns()
+		if err != nil {
+			return queryResult{err: err}
+		}
+
+		// Get all rows
+		var results [][]string
+		for rows.Next() {
+			// Create slice to hold column values
+			values := make([]interface{}, len(columns))
+			valuePtrs := make([]interface{}, len(columns))
+
+			for i := range values {
+				valuePtrs[i] = &values[i]
+			}
+
+			err := rows.Scan(valuePtrs...)
+			if err != nil {
+				return queryResult{err: err}
+			}
+
+			// Convert to strings
+			strValues := make([]string, len(columns))
+			for i, val := range values {
+				if val != nil {
+					strValues[i] = fmt.Sprintf("%v", val)
+				} else {
+					strValues[i] = "NULL"
+				}
+			}
+			results = append(results, strValues)
+		}
+
+		return queryResult{columns: columns, rows: results}
+	}
+}
+
+// Result messages
 type connectResult struct {
 	db     *sql.DB
 	tables []string
@@ -513,11 +691,30 @@ type columnsResult struct {
 	err     error
 }
 
+type queryResult struct {
+	columns []string
+	rows    [][]string
+	err     error
+}
+
+type clearResultMsg struct{}
+type clearErrorMsg struct{}
+
+// Command to clear query result after timeout
+func clearResultAfterTimeout() tea.Cmd {
+	return tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
+}
+
 // Implement Update to handle results
 func (m model) handleConnectResult(msg connectResult) (model, tea.Cmd) {
 	if msg.err != nil {
 		m.err = msg.err
-		return m, nil
+		// Start timeout to clear the error message
+		return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
+			return clearErrorMsg{}
+		})
 	}
 
 	m.db = msg.db
@@ -530,7 +727,7 @@ func (m model) handleConnectResult(msg connectResult) (model, tea.Cmd) {
 	for i, table := range msg.tables {
 		items[i] = item{
 			title: table,
-			desc:  "Ver estructura de la tabla",
+			desc:  "View table structure",
 		}
 	}
 	m.tablesList.SetItems(items)
@@ -541,7 +738,10 @@ func (m model) handleConnectResult(msg connectResult) (model, tea.Cmd) {
 func (m model) handleColumnsResult(msg columnsResult) (model, tea.Cmd) {
 	if msg.err != nil {
 		m.err = msg.err
-		return m, nil
+		// Start timeout to clear the error message
+		return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
+			return clearErrorMsg{}
+		})
 	}
 
 	m.err = nil
@@ -557,6 +757,72 @@ func (m model) handleColumnsResult(msg columnsResult) (model, tea.Cmd) {
 	return m, nil
 }
 
+func (m model) handleQueryResult(msg queryResult) (model, tea.Cmd) {
+	if msg.err != nil {
+		m.err = msg.err
+		// Start timeout to clear the error message
+		return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
+			return clearErrorMsg{}
+		})
+	}
+
+	m.err = nil
+
+	// Set up table for query results
+	if len(msg.rows) == 0 {
+		m.queryResult = "Query executed successfully. No rows returned."
+		// Clear the table
+		m.queryResultsTable.SetColumns([]table.Column{})
+		m.queryResultsTable.SetRows([]table.Row{})
+		
+		// Ensure query input has focus after query execution
+		m.queryInput.Focus()
+		m.queryResultsTable.Blur()
+		
+		// Start timeout to clear the message
+		return m, clearResultAfterTimeout()
+	} else {
+		// Create columns for the table
+		columns := make([]table.Column, len(msg.columns))
+		for i, col := range msg.columns {
+			width := 15 // Default width
+			if len(col) > 15 {
+				width = len(col) + 2
+			}
+			if width > 25 {
+				width = 25 // Max width to prevent overflow
+			}
+			columns[i] = table.Column{
+				Title: col,
+				Width: width,
+			}
+		}
+
+		// Create rows for the table
+		rows := make([]table.Row, len(msg.rows))
+		for i, row := range msg.rows {
+			tableRow := make(table.Row, len(row))
+			for j, val := range row {
+				// Truncate long values for display
+				if len(val) > 23 {
+					val = val[:20] + "..."
+				}
+				tableRow[j] = val
+			}
+			rows[i] = tableRow
+		}
+
+		m.queryResultsTable.SetColumns(columns)
+		m.queryResultsTable.SetRows(rows)
+		m.queryResult = fmt.Sprintf("Query returned %d rows", len(msg.rows))
+		
+		// Ensure query input has focus after query execution
+		m.queryInput.Focus()
+		m.queryResultsTable.Blur()
+
+		return m, nil
+	}
+}
 
 // Helper functions for getting database information
 
@@ -667,7 +933,7 @@ func (m model) updateSavedConnectionsList() model {
 		if len(connStr) > 50 {
 			connStr = connStr[:50] + "..."
 		}
-		
+
 		items[i] = item{
 			title: conn.Name,
 			desc:  fmt.Sprintf("%s - %s", conn.Driver, connStr),
@@ -676,7 +942,6 @@ func (m model) updateSavedConnectionsList() model {
 	m.savedConnectionsList.SetItems(items)
 	return m
 }
-
 
 // Functions for saved connections management
 

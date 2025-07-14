@@ -93,8 +93,8 @@ go vet ./...
 
 ### Core Features (Must Have)
 - [x] 1. Connection persistence - Save and load database connections
-- [ ] 2. Query execution - Run custom SQL queries within the TUI
-- [ ] 3. Result display - Show query results in paginated table format
+- [x] 2. Query execution - Run custom SQL queries within the TUI
+- [x] 3. Result display - Show query results in paginated table format
 - [ ] 4. Table data preview - Show sample rows from selected tables
 - [ ] 5. Export functionality - Export query results to CSV/JSON
 - [ ] 6. Connection testing - Validate connections before saving
