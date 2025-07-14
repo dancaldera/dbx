@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -249,6 +250,12 @@ type model struct {
 	isLoadingColumns     bool
 	isExecutingQuery     bool
 	isLoadingPreview     bool
+	// Export states
+	isExporting          bool
+	lastQueryColumns     []string
+	lastQueryRows        [][]string
+	lastPreviewColumns   []string
+	lastPreviewRows      [][]string
 	// Spinner for animations
 	spinner              spinner.Model
 }
@@ -392,6 +399,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleQueryResult(msg)
 	case dataPreviewResult:
 		return m.handleDataPreviewResult(msg)
+	case exportResult:
+		return m.handleExportResult(msg)
 	case clearResultMsg:
 		m.queryResult = ""
 		return m, nil
@@ -543,6 +552,62 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.queryInput.Focus()
 				m.queryResultsTable.Blur()
 				return m, nil
+			}
+
+		case "ctrl+e":
+			// Export query results to CSV
+			if m.state == queryView && !m.isExporting {
+				if len(m.lastQueryColumns) == 0 || len(m.lastQueryRows) == 0 {
+					m.queryResult = "⚠️ No data to export. Execute a query first!"
+					return m, tea.Tick(time.Second*2, func(t time.Time) tea.Msg {
+						return clearResultMsg{}
+					})
+				}
+				m.isExporting = true
+				m.err = nil
+				m.queryResult = ""
+				return m, m.exportDataToCSV(m.lastQueryColumns, m.lastQueryRows, "")
+			}
+			// Export preview data to CSV
+			if m.state == dataPreviewView && !m.isExporting {
+				if len(m.lastPreviewColumns) == 0 || len(m.lastPreviewRows) == 0 {
+					m.queryResult = "⚠️ No data to export. Load table preview first!"
+					return m, tea.Tick(time.Second*2, func(t time.Time) tea.Msg {
+						return clearResultMsg{}
+					})
+				}
+				m.isExporting = true
+				m.err = nil
+				m.queryResult = ""
+				return m, m.exportDataToCSV(m.lastPreviewColumns, m.lastPreviewRows, m.selectedTable)
+			}
+
+		case "ctrl+j":
+			// Export query results to JSON
+			if m.state == queryView && !m.isExporting {
+				if len(m.lastQueryColumns) == 0 || len(m.lastQueryRows) == 0 {
+					m.queryResult = "⚠️ No data to export. Execute a query first!"
+					return m, tea.Tick(time.Second*2, func(t time.Time) tea.Msg {
+						return clearResultMsg{}
+					})
+				}
+				m.isExporting = true
+				m.err = nil
+				m.queryResult = ""
+				return m, m.exportDataToJSON(m.lastQueryColumns, m.lastQueryRows, "")
+			}
+			// Export preview data to JSON
+			if m.state == dataPreviewView && !m.isExporting {
+				if len(m.lastPreviewColumns) == 0 || len(m.lastPreviewRows) == 0 {
+					m.queryResult = "⚠️ No data to export. Load table preview first!"
+					return m, tea.Tick(time.Second*2, func(t time.Time) tea.Msg {
+						return clearResultMsg{}
+					})
+				}
+				m.isExporting = true
+				m.err = nil
+				m.queryResult = ""
+				return m, m.exportDataToJSON(m.lastPreviewColumns, m.lastPreviewRows, m.selectedTable)
 			}
 
 		case "p":
@@ -1024,6 +1089,8 @@ func (m model) queryView() string {
 	var messageContent string
 	if m.isExecutingQuery {
 		messageContent = m.getLoadingText("Executing query...")
+	} else if m.isExporting {
+		messageContent = m.getLoadingText("Exporting data...")
 	} else if m.err != nil {
 		messageContent = errorStyle.Render("❌ " + m.err.Error())
 	}
@@ -1065,6 +1132,8 @@ func (m model) queryView() string {
 		keyStyle.Render("Enter") + ": execute query • " +
 		keyStyle.Render("Tab") + ": switch focus • " +
 		keyStyle.Render("↑/↓") + ": navigate results • " +
+		keyStyle.Render("Ctrl+E") + ": export CSV • " +
+		keyStyle.Render("Ctrl+J") + ": export JSON • " +
 		keyStyle.Render("Esc") + ": back to tables",
 	)
 	
@@ -1091,19 +1160,24 @@ func (m model) queryView() string {
 func (m model) dataPreviewView() string {
 	content := titleStyle.Render(fmt.Sprintf("Data Preview: %s", m.selectedTable)) + "\n\n"
 
-	if m.err != nil {
+	// Show status messages (loading, success, error)
+	if m.isExporting {
+		content += m.getLoadingText("Exporting data...") + "\n\n"
+	} else if m.err != nil {
 		content += errorStyle.Render("❌ Error: "+m.err.Error()) + "\n\n"
+	} else if m.queryResult != "" {
+		content += successStyle.Render(m.queryResult) + "\n\n"
 	}
 
 	// Only show the table if it has both columns and rows, and they match
 	if len(m.dataPreviewTable.Columns()) > 0 && len(m.dataPreviewTable.Rows()) > 0 {
-		content += successStyle.Render(fmt.Sprintf("Showing first 10 rows from %s", m.selectedTable)) + "\n\n"
+		content += infoStyle.Render(fmt.Sprintf("Showing first 10 rows from %s", m.selectedTable)) + "\n\n"
 		content += m.dataPreviewTable.View()
-	} else if m.err == nil {
+	} else if m.err == nil && m.queryResult == "" && !m.isExporting {
 		content += helpStyle.Render("Loading data preview...")
 	}
 
-	content += "\n\n" + helpStyle.Render("↑/↓: navigate rows • esc: back to tables")
+	content += "\n\n" + helpStyle.Render("↑/↓: navigate rows • " + keyStyle.Render("Ctrl+E") + ": export CSV • " + keyStyle.Render("Ctrl+J") + ": export JSON • esc: back to tables")
 	return docStyle.Render(content)
 }
 
@@ -1303,11 +1377,46 @@ type dataPreviewResult struct {
 type clearResultMsg struct{}
 type clearErrorMsg struct{}
 
+type exportResult struct {
+	filename string
+	format   string
+	rowCount int
+	err      error
+}
+
 // Command to clear query result after timeout
 func clearResultAfterTimeout() tea.Cmd {
 	return tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
 		return clearResultMsg{}
 	})
+}
+
+// Command to export data to CSV
+func (m model) exportDataToCSV(columns []string, rows [][]string, tableName string) tea.Cmd {
+	return func() tea.Msg {
+		filename := generateExportFilename(tableName, "csv")
+		err := exportToCSV(columns, rows, filename)
+		return exportResult{
+			filename: filename,
+			format:   "CSV",
+			rowCount: len(rows),
+			err:      err,
+		}
+	}
+}
+
+// Command to export data to JSON
+func (m model) exportDataToJSON(columns []string, rows [][]string, tableName string) tea.Cmd {
+	return func() tea.Msg {
+		filename := generateExportFilename(tableName, "json")
+		err := exportToJSON(columns, rows, filename)
+		return exportResult{
+			filename: filename,
+			format:   "JSON",
+			rowCount: len(rows),
+			err:      err,
+		}
+	}
 }
 
 // Implement Update to handle results
@@ -1393,6 +1502,10 @@ func (m model) handleQueryResult(msg queryResult) (model, tea.Cmd) {
 	}
 
 	m.err = nil
+
+	// Store raw data for export
+	m.lastQueryColumns = msg.columns
+	m.lastQueryRows = msg.rows
 
 	// Set up table for query results
 	if len(msg.rows) == 0 {
@@ -1505,6 +1618,10 @@ func (m model) handleDataPreviewResult(msg dataPreviewResult) (model, tea.Cmd) {
 	m.err = nil
 	m.state = dataPreviewView
 
+	// Store raw data for export
+	m.lastPreviewColumns = msg.columns
+	m.lastPreviewRows = msg.rows
+
 	// Validate that we have columns
 	if len(msg.columns) == 0 {
 		m.err = fmt.Errorf("no columns returned from query")
@@ -1590,6 +1707,32 @@ func (m model) handleDataPreviewResult(msg dataPreviewResult) (model, tea.Cmd) {
 	m.dataPreviewTable.SetStyles(getMagentaTableStyles())
 
 	return m, nil
+}
+
+func (m model) handleExportResult(msg exportResult) (model, tea.Cmd) {
+	m.isExporting = false
+	if msg.err != nil {
+		m.err = msg.err
+		// Start timeout to clear the error message
+		return m, tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
+			return clearErrorMsg{}
+		})
+	}
+	
+	// Show enhanced success message with row count and file info
+	m.err = nil
+	rowText := "row"
+	if msg.rowCount != 1 {
+		rowText = "rows"
+	}
+	
+	m.queryResult = fmt.Sprintf("✅ Exported %d %s to %s\n📄 %s", 
+		msg.rowCount, rowText, msg.format, msg.filename)
+	
+	// Start timeout to clear the success message (longer timeout for more detailed message)
+	return m, tea.Tick(time.Second*5, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
 }
 
 // Helper functions for getting database information
@@ -1905,6 +2048,72 @@ func saveConnections(connections []SavedConnection) error {
 	}
 
 	return os.WriteFile(connectionsFile, data, 0644)
+}
+
+// Export functions for query results
+func exportToCSV(columns []string, rows [][]string, filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write header
+	if err := writer.Write(columns); err != nil {
+		return err
+	}
+
+	// Write data rows
+	for _, row := range rows {
+		if err := writer.Write(row); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func exportToJSON(columns []string, rows [][]string, filename string) error {
+	// Convert to array of maps for JSON
+	var jsonData []map[string]interface{}
+	
+	for _, row := range rows {
+		record := make(map[string]interface{})
+		for i, col := range columns {
+			if i < len(row) {
+				// Convert "NULL" back to nil for JSON
+				if row[i] == "NULL" {
+					record[col] = nil
+				} else {
+					record[col] = row[i]
+				}
+			}
+		}
+		jsonData = append(jsonData, record)
+	}
+
+	// Write to file
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(jsonData)
+}
+
+// Generate default filename with timestamp
+func generateExportFilename(tableName, format string) string {
+	timestamp := time.Now().Format("20060102_150405")
+	if tableName != "" {
+		return fmt.Sprintf("%s_%s.%s", tableName, timestamp, format)
+	}
+	return fmt.Sprintf("query_result_%s.%s", timestamp, format)
 }
 
 func main() {

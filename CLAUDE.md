@@ -86,4 +86,8 @@ None currently. The application builds and runs successfully.
 - `Esc`: Go back to previous view
 - `s`: Access saved connections (from main menu) or save current connection (from connection view)
 - `n`: Start new database connection
+- `p`: Preview table data (first 10 rows)
+- `r`: Run custom SQL query
+- `Ctrl+E`: Export query results or table preview to CSV
+- `Ctrl+J`: Export query results or table preview to JSON
 - `q` or `Ctrl+C`: Quit application

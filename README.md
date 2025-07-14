@@ -42,6 +42,8 @@ Run the application:
 - **s**: Save database connection (from tables view)
 - **e**: Edit saved connection (in saved connections view)
 - **d**: Delete saved connection (in saved connections view)
+- **Ctrl+E**: Export query results or table preview to CSV
+- **Ctrl+J**: Export query results or table preview to JSON
 - **q** or **Ctrl+C**: Quit application
 
 ### Connection Strings
@@ -68,6 +70,25 @@ username:password@tcp(localhost:3306)/database_name
 3. **Browse Tables**: View all available tables in the connected database
 4. **Explore Data**: Preview table data (first 10 rows) or view column structure
 5. **Run Queries**: Execute custom SQL queries with formatted table results
+6. **Export Data**: Export query results or table previews to CSV/JSON format
+
+## Export Functionality
+
+DBX supports exporting query results and table previews to multiple formats:
+
+### Export Formats
+- **CSV**: Comma-separated values format with headers
+- **JSON**: JavaScript Object Notation format as an array of objects
+
+### Export Usage
+- **From Query Results**: After executing a query, press `Ctrl+E` for CSV or `Ctrl+J` for JSON
+- **From Table Preview**: When viewing table data preview, press `Ctrl+E` for CSV or `Ctrl+J` for JSON
+
+### Export Files
+- Files are saved in the current working directory
+- Automatic filename generation includes timestamps
+- Query results: `query_result_YYYYMMDD_HHMMSS.csv/json`
+- Table previews: `tablename_YYYYMMDD_HHMMSS.csv/json`
 
 ## Dependencies
 
@@ -105,7 +126,7 @@ go vet ./...
 - [x] 2. Query execution - Run custom SQL queries within the TUI
 - [x] 3. Result display - Show query results in paginated table format
 - [x] 4. Table data preview - Show sample rows from selected tables
-- [ ] 5. Export functionality - Export query results to CSV/JSON
+- [x] 5. Export functionality - Export query results to CSV/JSON
 - [ ] 6. Connection testing - Validate connections before saving
 - [ ] 7. Error handling improvements - Better error messages and recovery
 - [ ] 8. Search functionality - Search tables and columns by name
