@@ -95,12 +95,12 @@ go vet ./...
 - [x] 1. Connection persistence - Save and load database connections
 - [ ] 2. Query execution - Run custom SQL queries within the TUI
 - [ ] 3. Result display - Show query results in paginated table format
-- [ ] 4. Export functionality - Export query results to CSV/JSON
-- [ ] 5. Connection testing - Validate connections before saving
-- [ ] 6. Error handling improvements - Better error messages and recovery
-- [ ] 7. Table data preview - Show sample rows from selected tables
+- [ ] 4. Table data preview - Show sample rows from selected tables
+- [ ] 5. Export functionality - Export query results to CSV/JSON
+- [ ] 6. Connection testing - Validate connections before saving
+- [ ] 7. Error handling improvements - Better error messages and recovery
 - [ ] 8. Search functionality - Search tables and columns by name
-- [ ] 9. Connection history - Recently used connections list
+- [ ] 9. Query history - Save and recall previously executed queries
 
 ### Enhanced Database Support
 - [ ] 10. Database schema support - Handle multiple schemas in PostgreSQL
@@ -108,28 +108,28 @@ go vet ./...
 - [ ] 12. Index information - Display table indexes and constraints
 - [ ] 13. Foreign key relationships - Show table relationships
 - [ ] 14. Stored procedures - List and describe stored procedures/functions
-
-### User Experience
-- [ ] 15. Configuration file - Settings for themes, defaults, and preferences
-- [ ] 16. Keyboard shortcuts help - In-app help screen
-- [ ] 17. Connection string validation - Real-time validation with hints
-- [ ] 18. Themes support - Multiple color schemes and styling options
-- [ ] 19. Responsive layout - Better handling of different terminal sizes
-- [ ] 20. Loading indicators - Progress bars for long-running operations
+- [ ] 15. SSL/TLS support - Secure connections with certificate validation
 
 ### Advanced Features
-- [ ] 21. Query history - Save and recall previously executed queries
-- [ ] 22. Bookmark tables - Mark frequently accessed tables
-- [ ] 23. Data filtering - Basic filtering on table data preview
-- [ ] 24. SSL/TLS support - Secure connections with certificate validation
-- [ ] 25. Multi-connection support - Work with multiple databases simultaneously
+- [ ] 16. Multi-connection support - Work with multiple databases simultaneously
+- [ ] 17. Data filtering - Basic filtering on table data preview
+- [ ] 18. Bookmark tables - Mark frequently accessed tables
+- [ ] 19. Connection string validation - Real-time validation with hints
+- [ ] 20. Configuration file - Settings for defaults and preferences
+- [ ] 21. Performance monitoring - Basic query execution time tracking
 
-### Bonus Features (Nice to Have)
-- [ ] 26. Query builder - Visual query construction
-- [ ] 27. Database migration tools - Simple schema migration utilities
-- [ ] 28. Performance monitoring - Basic query execution time tracking
-- [ ] 29. Plugin system - Extensible architecture for custom features
-- [ ] 30. Cloud database support - MongoDB, DynamoDB, etc.
+### Extended Database Support
+- [ ] 22. Redis support - Connect to and explore Redis data structures
+- [ ] 23. MongoDB support - Browse MongoDB collections and documents
+- [ ] 24. Query builder - Visual query construction for SQL databases
+- [ ] 25. Database migration tools - Simple schema migration utilities
+
+### Nice to Have Features
+- [ ] 26. Keyboard shortcuts help - In-app help screen
+- [ ] 27. Loading indicators - Progress bars for long-running operations
+- [ ] 28. Plugin system - Extensible architecture for custom features
+- [ ] 29. Themes support - Multiple color schemes and styling options
+- [ ] 30. Cloud database support - AWS RDS, Google Cloud SQL, etc.
 
 ## License
 
