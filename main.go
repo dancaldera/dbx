@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -143,13 +144,8 @@ var (
 )
 
 // Helper function to get loading text with spinner
-func getLoadingText(message string) string {
-	// Simple rotating spinner
-	spinners := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-	// Use a simple counter based approach for demonstration
-	// In a real app, you'd use time-based animation
-	spinnerIndex := 0 // This could be animated with a ticker
-	return loadingStyle.Render(spinners[spinnerIndex] + " " + message)
+func (m model) getLoadingText(message string) string {
+	return loadingStyle.Render(m.spinner.View() + " " + message)
 }
 
 // Helper function to get magenta-themed table styles
@@ -253,6 +249,8 @@ type model struct {
 	isLoadingColumns     bool
 	isExecutingQuery     bool
 	isLoadingPreview     bool
+	// Spinner for animations
+	spinner              spinner.Model
 }
 
 func initialModel() model {
@@ -353,6 +351,11 @@ func initialModel() model {
 	)
 	dataPreviewTable.SetStyles(getMagentaTableStyles())
 
+	// Initialize spinner
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(accentMagenta)
+
 	return model{
 		state:                dbTypeView,
 		dbTypeList:           dbList,
@@ -366,11 +369,12 @@ func initialModel() model {
 		dataPreviewTable:     dataPreviewTable,
 		savedConnections:     savedConnections,
 		editingConnectionIdx: -1,
+		spinner:              s,
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, m.spinner.Tick)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -782,6 +786,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.columnsTable, cmd = m.columnsTable.Update(msg)
 	case dataPreviewView:
 		m.dataPreviewTable, cmd = m.dataPreviewTable.Update(msg)
+	default:
+		// Handle spinner messages
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	}
 
 	return m, cmd
@@ -829,7 +837,7 @@ func (m model) savedConnectionsView() string {
 	var content string
 	
 	if m.isConnecting {
-		loadingMsg := getLoadingText("Connecting to saved connection...")
+		loadingMsg := m.getLoadingText("Connecting to saved connection...")
 		content = m.savedConnectionsList.View() + "\n" + loadingMsg
 	} else if len(m.savedConnections) == 0 {
 		emptyMsg := infoStyle.Render("📝 No saved connections yet.\n\nGo back and create your first connection!")
@@ -904,11 +912,11 @@ func (m model) connectionView() string {
 	
 	var messageContent string
 	if m.isTestingConnection {
-		messageContent = getLoadingText("Testing connection...")
+		messageContent = m.getLoadingText("Testing connection...")
 	} else if m.isSavingConnection {
-		messageContent = getLoadingText("Saving connection...")
+		messageContent = m.getLoadingText("Saving connection...")
 	} else if m.isConnecting {
-		messageContent = getLoadingText("Connecting to database...")
+		messageContent = m.getLoadingText("Connecting to database...")
 	} else if m.err != nil {
 		messageContent = errorStyle.Render("❌ " + m.err.Error())
 	} else if m.queryResult != "" {
@@ -980,10 +988,10 @@ func (m model) tablesView() string {
 	var content string
 	
 	if m.isLoadingColumns {
-		loadingMsg := getLoadingText("Loading table columns...")
+		loadingMsg := m.getLoadingText("Loading table columns...")
 		content = m.tablesList.View() + "\n" + loadingMsg
 	} else if m.isLoadingPreview {
-		loadingMsg := getLoadingText("Loading table data preview...")
+		loadingMsg := m.getLoadingText("Loading table data preview...")
 		content = m.tablesList.View() + "\n" + loadingMsg
 	} else if len(m.tables) == 0 {
 		emptyMsg := infoStyle.Render("📋 No tables found in this database.\n\nThe database might be empty or you might not have sufficient permissions.")
@@ -1015,7 +1023,7 @@ func (m model) queryView() string {
 	
 	var messageContent string
 	if m.isExecutingQuery {
-		messageContent = getLoadingText("Executing query...")
+		messageContent = m.getLoadingText("Executing query...")
 	} else if m.err != nil {
 		messageContent = errorStyle.Render("❌ " + m.err.Error())
 	}
