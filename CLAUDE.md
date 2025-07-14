@@ -26,11 +26,19 @@ This is **DBX**, a terminal-based database explorer built in Go. It's a TUI (Ter
 
 ### Application Flow
 
-1. User selects database type from list
-2. User enters connection string specific to chosen database type
+1. User selects database type from list OR selects saved connection
+2. User enters connection string specific to chosen database type (if not using saved connection)
 3. Application connects and queries available tables
 4. User can select tables to view their column structure
-5. Navigation between states using keyboard shortcuts (Enter, Esc, n for new connection)
+5. Navigation between states using keyboard shortcuts (Enter, Esc, s for saved connections, n for new connection)
+
+### Connection Persistence
+
+The application now supports saving and loading database connections:
+- **Config Location**: `~/.dbx/connections.json`
+- **Save Connection**: Press `s` in connection view after entering connection string
+- **Load Connections**: Press `s` from main menu to view saved connections
+- **Auto-connect**: Select saved connection with Enter to automatically connect
 
 ## Development Commands
 
@@ -76,5 +84,6 @@ The project currently has unused imports (`os` and `strings` in main.go:7-8) tha
 - `↑/↓`: Navigate lists and tables
 - `Enter`: Select/confirm action
 - `Esc`: Go back to previous view
+- `s`: Access saved connections (from main menu) or save current connection (from connection view)
 - `n`: Start new database connection
 - `q` or `Ctrl+C`: Quit application

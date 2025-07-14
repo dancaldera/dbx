@@ -92,7 +92,7 @@ go vet ./...
 ## MVP Roadmap
 
 ### Core Features (Must Have)
-- [ ] 1. Connection persistence - Save and load database connections
+- [x] 1. Connection persistence - Save and load database connections
 - [ ] 2. Query execution - Run custom SQL queries within the TUI
 - [ ] 3. Result display - Show query results in paginated table format
 - [ ] 4. Export functionality - Export query results to CSV/JSON
