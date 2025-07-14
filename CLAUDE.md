@@ -1,0 +1,80 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+This is **DBX**, a terminal-based database explorer built in Go. It's a TUI (Terminal User Interface) application that allows users to connect to different types of databases (PostgreSQL, MySQL, SQLite) and explore their structure interactively.
+
+## Architecture
+
+### Core Components
+
+- **Single-file application** (`main.go`) using the Bubble Tea framework for TUI
+- **State machine pattern** with four main view states:
+  - `dbTypeView`: Database type selection screen
+  - `connectionView`: Connection string input screen  
+  - `tablesView`: Display available tables in connected database
+  - `columnsView`: Show column details for selected table
+
+### Key Dependencies
+
+- `github.com/charmbracelet/bubbletea`: TUI framework and event handling
+- `github.com/charmbracelet/bubbles`: Pre-built UI components (list, table, textinput)
+- `github.com/charmbracelet/lipgloss`: Styling and layout
+- Database drivers: `github.com/lib/pq` (PostgreSQL), `github.com/go-sql-driver/mysql` (MySQL), `github.com/mattn/go-sqlite3` (SQLite)
+
+### Application Flow
+
+1. User selects database type from list
+2. User enters connection string specific to chosen database type
+3. Application connects and queries available tables
+4. User can select tables to view their column structure
+5. Navigation between states using keyboard shortcuts (Enter, Esc, n for new connection)
+
+## Development Commands
+
+### Build and Run
+```bash
+# Build the application
+go build .
+
+# Run directly 
+go run .
+
+# Install dependencies
+go mod tidy
+
+# Update dependencies
+go mod download
+```
+
+### Code Quality
+```bash
+# Format code
+go fmt ./...
+
+# Vet for issues
+go vet ./...
+
+# Run tests (currently no tests exist)
+go test ./...
+```
+
+## Known Issues
+
+The project currently has unused imports (`os` and `strings` in main.go:7-8) that prevent compilation. These need to be removed or used before the application can run.
+
+## Database Connection Examples
+
+- **PostgreSQL**: `postgres://user:password@localhost/dbname?sslmode=disable`
+- **MySQL**: `user:password@tcp(localhost:3306)/dbname`  
+- **SQLite**: `/path/to/database.db`
+
+## Navigation Controls
+
+- `↑/↓`: Navigate lists and tables
+- `Enter`: Select/confirm action
+- `Esc`: Go back to previous view
+- `n`: Start new database connection
+- `q` or `Ctrl+C`: Quit application
