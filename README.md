@@ -75,6 +75,27 @@ username:password@tcp(localhost:3306)/database_name
 5. **Run Queries**: Execute custom SQL queries with formatted table results
 6. **Export Data**: Export query results or table previews to CSV/JSON format
 
+## Schema Support
+
+DBX provides comprehensive schema support for PostgreSQL databases:
+
+### PostgreSQL Schema Features
+- **Automatic Detection**: Detects all available schemas in PostgreSQL databases
+- **Schema Selection**: When multiple schemas exist, presents a selection interface
+- **Schema Navigation**: Browse tables within specific schemas
+- **Schema Information**: Displays schema names in table listings for non-public schemas
+
+### Schema Workflow
+1. **Single Schema**: If only one schema exists (usually `public`), proceeds directly to table listing
+2. **Multiple Schemas**: Shows schema selection screen with descriptions
+3. **Schema Selection**: Choose schema to explore its tables and structure
+4. **Schema Context**: All subsequent table operations work within the selected schema
+
+### Supported Schemas
+- **PostgreSQL**: Full schema support with selection interface
+- **MySQL**: Uses database-level organization (no schema selection needed)
+- **SQLite**: Uses default `main` schema
+
 ## Export Functionality
 
 DBX supports exporting query results and table previews to multiple formats:
@@ -157,7 +178,7 @@ go vet ./...
 - [x] 9. Query history - Save and recall previously executed queries
 
 ### Enhanced Database Support
-- [ ] 10. Database schema support - Handle multiple schemas in PostgreSQL
+- [x] 10. Database schema support - Handle multiple schemas in PostgreSQL
 - [ ] 11. View support - Browse and explore database views
 - [ ] 12. Index information - Display table indexes and constraints
 - [ ] 13. Foreign key relationships - Show table relationships

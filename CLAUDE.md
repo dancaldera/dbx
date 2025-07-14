@@ -11,11 +11,14 @@ This is **DBX**, a terminal-based database explorer built in Go. It's a TUI (Ter
 ### Core Components
 
 - **Single-file application** (`main.go`) using the Bubble Tea framework for TUI
-- **State machine pattern** with four main view states:
+- **State machine pattern** with main view states:
   - `dbTypeView`: Database type selection screen
-  - `connectionView`: Connection string input screen  
+  - `connectionView`: Connection string input screen
+  - `schemaView`: Schema selection for PostgreSQL (when multiple schemas exist)
   - `tablesView`: Display available tables in connected database
   - `columnsView`: Show column details for selected table
+  - `queryView`: SQL query execution interface
+  - `queryHistoryView`: Browse and reuse previous queries
 
 ### Key Dependencies
 
@@ -39,6 +42,14 @@ The application now supports saving and loading database connections:
 - **Save Connection**: Press `s` in connection view after entering connection string
 - **Load Connections**: Press `s` from main menu to view saved connections
 - **Auto-connect**: Select saved connection with Enter to automatically connect
+
+### Schema Support
+
+For PostgreSQL databases with multiple schemas:
+- **Automatic Detection**: Application detects available schemas on connection
+- **Schema Selection**: If multiple schemas exist, shows schema selection screen
+- **Schema Context**: All table operations work within the selected schema
+- **Default Behavior**: Single schema databases (or MySQL/SQLite) skip schema selection
 
 ## Development Commands
 

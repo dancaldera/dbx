@@ -178,6 +178,7 @@ const (
 	connectionView
 	saveConnectionView
 	editConnectionView
+	schemaView
 	tablesView
 	columnsView
 	queryView
@@ -207,9 +208,16 @@ type dbType struct {
 	driver string
 }
 
+// Schema information
+type schemaInfo struct {
+	name        string
+	description string
+}
+
 // Table information
 type tableInfo struct {
 	name        string
+	schema      string
 	tableType   string
 	rowCount    int64
 	description string
@@ -249,6 +257,10 @@ type model struct {
 	tables               []string
 	tableInfos           []tableInfo
 	selectedTable        string
+	schemas              []schemaInfo
+	selectedSchema       string
+	schemasList          list.Model
+	isLoadingSchemas     bool
 	savedConnections     []SavedConnection
 	editingConnectionIdx int
 	queryResult          string
@@ -402,6 +414,13 @@ func initialModel() model {
 	queryHistoryList.SetFilteringEnabled(false)
 	queryHistoryList.SetShowHelp(false)
 
+	// Schemas list
+	schemasList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
+	schemasList.Title = "🗂️ Database Schemas"
+	schemasList.SetShowStatusBar(false)
+	schemasList.SetFilteringEnabled(false)
+	schemasList.SetShowHelp(false)
+
 	m := model{
 		state:                dbTypeView,
 		dbTypeList:           dbList,
@@ -415,6 +434,8 @@ func initialModel() model {
 		queryResultsTable:    queryResultsTable,
 		dataPreviewTable:     dataPreviewTable,
 		queryHistoryList:     queryHistoryList,
+		schemasList:          schemasList,
+		selectedSchema:       "public", // Default to public schema for PostgreSQL
 		savedConnections:     savedConnections,
 		queryHistory:         queryHistory,
 		editingConnectionIdx: -1,
@@ -464,6 +485,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.savedConnectionsList.SetSize(msg.Width-h, msg.Height-v-5)
 		m.tablesList.SetSize(msg.Width-h, msg.Height-v-5)
 		m.queryHistoryList.SetSize(msg.Width-h, msg.Height-v-5)
+		m.schemasList.SetSize(msg.Width-h, msg.Height-v-5)
 		m.textInput.Width = msg.Width - h - 4
 		m.nameInput.Width = msg.Width - h - 4
 		m.queryInput.Width = msg.Width - h - 4
@@ -520,6 +542,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = savedConnectionsView
 				m.err = nil
 				m.editingConnectionIdx = -1
+			case schemaView:
+				// Close database connection and go back to connection view
+				if m.db != nil {
+					m.db.Close()
+					m.db = nil
+				}
+				m.state = connectionView
+				m.err = nil
 			case tablesView:
 				// Exit search mode if active
 				if m.isSearchingTables {
@@ -860,6 +890,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
+			case schemaView:
+				if i, ok := m.schemasList.SelectedItem().(item); ok {
+					// Set selected schema and load tables for that schema
+					m.selectedSchema = i.title
+					m.isLoadingTables = true
+					m.err = nil
+					return m, m.loadTablesForSchema()
+				}
+
 			case tablesView:
 				// Don't trigger table selection if we're in search mode
 				if i, ok := m.tablesList.SelectedItem().(item); ok && !m.isLoadingColumns && !m.isSearchingTables {
@@ -1035,6 +1074,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Normal column table navigation
 			m.columnsTable, cmd = m.columnsTable.Update(msg)
 		}
+	case schemaView:
+		m.schemasList, cmd = m.schemasList.Update(msg)
 	case queryHistoryView:
 		m.queryHistoryList, cmd = m.queryHistoryList.Update(msg)
 	case dataPreviewView:
@@ -1060,6 +1101,8 @@ func (m model) View() string {
 		return m.saveConnectionView()
 	case editConnectionView:
 		return m.editConnectionView()
+	case schemaView:
+		return m.schemaView()
 	case tablesView:
 		return m.tablesView()
 	case columnsView:
@@ -1147,6 +1190,27 @@ func (m model) editConnectionView() string {
 
 	content += "\n\n" + helpStyle.Render("enter: save changes • tab: switch fields • esc: cancel")
 	return docStyle.Render(content)
+}
+
+func (m model) schemaView() string {
+	var content string
+
+	if m.isLoadingSchemas {
+		loadingMsg := m.getLoadingText("Loading schemas...")
+		content = m.schemasList.View() + "\n" + loadingMsg
+	} else if len(m.schemas) == 0 {
+		emptyMsg := infoStyle.Render("🗂️ No additional schemas found.\n\nUsing default schema.")
+		content = m.schemasList.View() + "\n" + emptyMsg
+	} else {
+		content = m.schemasList.View()
+	}
+
+	helpText := helpStyle.Render(
+		keyStyle.Render("enter") + ": select schema • " +
+			keyStyle.Render("esc") + ": back",
+	)
+
+	return docStyle.Render(content + "\n" + helpText)
 }
 
 func (m model) connectionView() string {
@@ -1525,8 +1589,34 @@ func (m model) connectDB() tea.Cmd {
 			return connectResult{err: err}
 		}
 
-		// Get tables list with metadata
-		tableInfos, err := getTableInfos(db, m.selectedDB.driver)
+		// Get schemas first for PostgreSQL
+		schemas, err := getSchemas(db, m.selectedDB.driver)
+		if err != nil {
+			db.Close()
+			return connectResult{err: err}
+		}
+
+		// If this is PostgreSQL and we have multiple schemas, return schemas for selection
+		if m.selectedDB.driver == "postgres" && len(schemas) > 1 {
+			return connectResult{db: db, schemas: schemas, requiresSchemaSelection: true}
+		}
+
+		// Otherwise, get tables using the default schema
+		var defaultSchema string
+		if len(schemas) > 0 {
+			defaultSchema = schemas[0].name
+		} else {
+			switch m.selectedDB.driver {
+			case "postgres":
+				defaultSchema = "public"
+			case "mysql":
+				defaultSchema = "mysql"
+			case "sqlite3":
+				defaultSchema = "main"
+			}
+		}
+
+		tableInfos, err := getTableInfos(db, m.selectedDB.driver, defaultSchema)
 		if err != nil {
 			db.Close()
 			return connectResult{err: err}
@@ -1538,7 +1628,7 @@ func (m model) connectDB() tea.Cmd {
 			tables[i] = info.name
 		}
 
-		return connectResult{db: db, tables: tables, tableInfos: tableInfos}
+		return connectResult{db: db, tables: tables, tableInfos: tableInfos, schemas: schemas, selectedSchema: defaultSchema}
 	}
 }
 
@@ -1550,6 +1640,24 @@ func (m model) loadColumns() tea.Cmd {
 			return columnsResult{err: err}
 		}
 		return columnsResult{columns: columns}
+	}
+}
+
+// Command to load tables for selected schema
+func (m model) loadTablesForSchema() tea.Cmd {
+	return func() tea.Msg {
+		tableInfos, err := getTableInfos(m.db, m.selectedDB.driver, m.selectedSchema)
+		if err != nil {
+			return connectResult{err: err}
+		}
+
+		// Extract table names for backward compatibility
+		tables := make([]string, len(tableInfos))
+		for i, info := range tableInfos {
+			tables[i] = info.name
+		}
+
+		return connectResult{tables: tables, tableInfos: tableInfos}
 	}
 }
 
@@ -1677,10 +1785,13 @@ func (m model) executeQuery(query string) tea.Cmd {
 
 // Result messages
 type connectResult struct {
-	db         *sql.DB
-	tables     []string
-	tableInfos []tableInfo
-	err        error
+	db                     *sql.DB
+	tables                 []string
+	tableInfos             []tableInfo
+	schemas                []schemaInfo
+	selectedSchema         string
+	requiresSchemaSelection bool
+	err                    error
 }
 
 type testConnectionResult struct {
@@ -1792,12 +1903,45 @@ func (m model) handleConnectResult(msg connectResult) (model, tea.Cmd) {
 		return m.handleErrorWithRecovery(msg.err, 3)
 	}
 
+	// Check if this is a tables-for-schema result (no db connection, just tables)
+	if msg.db == nil && len(msg.tables) > 0 {
+		// This is a result from loadTablesForSchema
+		m.isLoadingTables = false
+		m.tables = msg.tables
+		m.tableInfos = msg.tableInfos
+		m.state = tablesView
+		m.err = nil
+
+		// Create items for tables list with metadata
+		items := make([]list.Item, len(msg.tableInfos))
+		for i, tableInfo := range msg.tableInfos {
+			items[i] = item{
+				title: tableInfo.name,
+				desc:  tableInfo.description,
+			}
+		}
+		m.tablesList.SetItems(items)
+		return m, nil
+	}
+
+	// This is a full connection result
 	m.isConnecting = false
 	m.isSavingConnection = false
 	m.db = msg.db
+	m.schemas = msg.schemas
+	m.selectedSchema = msg.selectedSchema
+	m.err = nil
+
+	// If we require schema selection, go to schema view
+	if msg.requiresSchemaSelection {
+		m.state = schemaView
+		m = m.updateSchemasList()
+		return m, nil
+	}
+
+	// Otherwise, go directly to tables view
 	m.tables = msg.tables
 	m.tableInfos = msg.tableInfos
-	m.err = nil
 	m.state = tablesView
 
 	// Create items for tables list with metadata
@@ -2148,7 +2292,57 @@ func getTables(db *sql.DB, driver string) ([]string, error) {
 	return tables, nil
 }
 
-func getTableInfos(db *sql.DB, driver string) ([]tableInfo, error) {
+func getSchemas(db *sql.DB, driver string) ([]schemaInfo, error) {
+	var schemas []schemaInfo
+	
+	switch driver {
+	case "postgres":
+		query := `
+			SELECT 
+				schema_name,
+				CASE 
+					WHEN schema_name = 'public' THEN 'Default public schema'
+					WHEN schema_name IN ('information_schema', 'pg_catalog', 'pg_toast') THEN 'System schema'
+					ELSE 'User schema'
+				END as description
+			FROM information_schema.schemata 
+			WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast')
+			ORDER BY 
+				CASE WHEN schema_name = 'public' THEN 0 ELSE 1 END,
+				schema_name`
+
+		rows, err := db.Query(query)
+		if err != nil {
+			// If schema query fails, return just the public schema
+			return []schemaInfo{{"public", "Default public schema"}}, nil
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var schema schemaInfo
+			err := rows.Scan(&schema.name, &schema.description)
+			if err != nil {
+				continue
+			}
+			schemas = append(schemas, schema)
+		}
+
+		// If no schemas found, add public as fallback
+		if len(schemas) == 0 {
+			schemas = append(schemas, schemaInfo{"public", "Default public schema"})
+		}
+
+	case "mysql", "sqlite3":
+		// MySQL and SQLite don't have schemas in the same way PostgreSQL does
+		// For MySQL, we could use databases, but for now we'll just return empty
+		// This means schema selection won't be shown for these databases
+		return []schemaInfo{}, nil
+	}
+
+	return schemas, nil
+}
+
+func getTableInfos(db *sql.DB, driver, schema string) ([]tableInfo, error) {
 	var tableInfos []tableInfo
 
 	switch driver {
@@ -2156,24 +2350,25 @@ func getTableInfos(db *sql.DB, driver string) ([]tableInfo, error) {
 		query := `
 			SELECT 
 				t.tablename as table_name,
+				t.schemaname as schema_name,
 				'BASE TABLE' as table_type,
 				COALESCE(s.n_tup_ins + s.n_tup_upd - s.n_tup_del, 0) as estimated_rows
 			FROM pg_tables t
-			LEFT JOIN pg_stat_user_tables s ON t.tablename = s.relname
-			WHERE t.schemaname = 'public'
+			LEFT JOIN pg_stat_user_tables s ON t.tablename = s.relname AND t.schemaname = s.schemaname
+			WHERE t.schemaname = $1
 			ORDER BY t.tablename`
 
-		rows, err := db.Query(query)
+		rows, err := db.Query(query, schema)
 		if err != nil {
 			// Fallback to simple table list if stats are not available
-			return getSimpleTableInfos(db, driver)
+			return getSimpleTableInfos(db, driver, schema)
 		}
 		defer rows.Close()
 
 		for rows.Next() {
 			var info tableInfo
 			var estimatedRows sql.NullInt64
-			err := rows.Scan(&info.name, &info.tableType, &estimatedRows)
+			err := rows.Scan(&info.name, &info.schema, &info.tableType, &estimatedRows)
 			if err != nil {
 				continue
 			}
@@ -2183,9 +2378,17 @@ func getTableInfos(db *sql.DB, driver string) ([]tableInfo, error) {
 				if info.rowCount < 0 {
 					info.rowCount = 0
 				}
-				info.description = fmt.Sprintf("Table • ~%d rows", info.rowCount)
+				if info.schema != "" && info.schema != "public" {
+					info.description = fmt.Sprintf("%s.%s • ~%d rows", info.schema, "table", info.rowCount)
+				} else {
+					info.description = fmt.Sprintf("Table • ~%d rows", info.rowCount)
+				}
 			} else {
-				info.description = "Table"
+				if info.schema != "" && info.schema != "public" {
+					info.description = fmt.Sprintf("%s.%s", info.schema, "table")
+				} else {
+					info.description = "Table"
+				}
 			}
 
 			tableInfos = append(tableInfos, info)
@@ -2195,6 +2398,7 @@ func getTableInfos(db *sql.DB, driver string) ([]tableInfo, error) {
 		query := `
 			SELECT 
 				TABLE_NAME,
+				TABLE_SCHEMA,
 				TABLE_TYPE,
 				COALESCE(TABLE_ROWS, 0) as table_rows
 			FROM INFORMATION_SCHEMA.TABLES 
@@ -2203,14 +2407,14 @@ func getTableInfos(db *sql.DB, driver string) ([]tableInfo, error) {
 
 		rows, err := db.Query(query)
 		if err != nil {
-			return getSimpleTableInfos(db, driver)
+			return getSimpleTableInfos(db, driver, schema)
 		}
 		defer rows.Close()
 
 		for rows.Next() {
 			var info tableInfo
 			var tableRows sql.NullInt64
-			err := rows.Scan(&info.name, &info.tableType, &tableRows)
+			err := rows.Scan(&info.name, &info.schema, &info.tableType, &tableRows)
 			if err != nil {
 				continue
 			}
@@ -2235,6 +2439,7 @@ func getTableInfos(db *sql.DB, driver string) ([]tableInfo, error) {
 		for _, tableName := range tables {
 			info := tableInfo{
 				name:      tableName,
+				schema:    "main", // SQLite uses "main" as the default schema
 				tableType: "table",
 			}
 
@@ -2253,13 +2458,13 @@ func getTableInfos(db *sql.DB, driver string) ([]tableInfo, error) {
 		}
 
 	default:
-		return getSimpleTableInfos(db, driver)
+		return getSimpleTableInfos(db, driver, schema)
 	}
 
 	return tableInfos, nil
 }
 
-func getSimpleTableInfos(db *sql.DB, driver string) ([]tableInfo, error) {
+func getSimpleTableInfos(db *sql.DB, driver, schema string) ([]tableInfo, error) {
 	tables, err := getTables(db, driver)
 	if err != nil {
 		return nil, err
@@ -2267,8 +2472,21 @@ func getSimpleTableInfos(db *sql.DB, driver string) ([]tableInfo, error) {
 
 	var tableInfos []tableInfo
 	for _, tableName := range tables {
+		var schemaName string
+		switch driver {
+		case "postgres":
+			schemaName = schema
+		case "mysql":
+			schemaName = "mysql" // Default schema name for MySQL
+		case "sqlite3":
+			schemaName = "main"
+		default:
+			schemaName = ""
+		}
+
 		tableInfos = append(tableInfos, tableInfo{
 			name:        tableName,
+			schema:      schemaName,
 			tableType:   "table",
 			description: "Table",
 		})
@@ -2556,6 +2774,18 @@ func (m model) addQueryToHistory(query string, success bool, rowCount int) model
 	// Save to file
 	go saveQueryHistory(m.queryHistory) // Save in background to avoid blocking UI
 
+	return m
+}
+
+func (m model) updateSchemasList() model {
+	items := make([]list.Item, len(m.schemas))
+	for i, schema := range m.schemas {
+		items[i] = item{
+			title: schema.name,
+			desc:  schema.description,
+		}
+	}
+	m.schemasList.SetItems(items)
 	return m
 }
 
