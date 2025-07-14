@@ -75,6 +75,14 @@ type dbType struct {
 	driver string
 }
 
+// Table information
+type tableInfo struct {
+	name        string
+	tableType   string
+	rowCount    int64
+	description string
+}
+
 var dbTypes = []dbType{
 	{"PostgreSQL", "postgres"},
 	{"MySQL", "mysql"},
@@ -107,6 +115,7 @@ type model struct {
 	db                   *sql.DB
 	err                  error
 	tables               []string
+	tableInfos           []tableInfo
 	selectedTable        string
 	savedConnections     []SavedConnection
 	editingConnectionIdx int
@@ -330,7 +339,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.err = nil
 				m.editingConnectionIdx = -1
 			case tablesView:
-				m.state = connectionView
+				// Close database connection and go back to main menu
+				if m.db != nil {
+					m.db.Close()
+					m.db = nil
+				}
+				m.state = dbTypeView
+				m.connectionStr = ""
+				m.tables = nil
+				m.tableInfos = nil
+				m.selectedTable = ""
+				m.err = nil
 			case columnsView:
 				m.state = tablesView
 			case queryView:
@@ -706,7 +725,7 @@ func (m model) tablesView() string {
 		content += m.tablesList.View()
 	}
 
-	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: view columns • p: preview data • r: run query • s: save connection • esc: back")
+	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: view columns • p: preview data • r: run query • s: save connection • esc: disconnect")
 	return docStyle.Render(content)
 }
 
@@ -731,8 +750,8 @@ func (m model) queryView() string {
 		content += "Query Result:\n"
 		content += successStyle.Render(m.queryResult) + "\n\n"
 
-		// Show the table if there are results
-		if len(m.queryResultsTable.Rows()) > 0 {
+		// Only show the table if it has both columns and rows, and they match
+		if len(m.queryResultsTable.Columns()) > 0 && len(m.queryResultsTable.Rows()) > 0 {
 			content += m.queryResultsTable.View() + "\n\n"
 		}
 	}
@@ -753,7 +772,8 @@ func (m model) dataPreviewView() string {
 		content += errorStyle.Render("❌ Error: "+m.err.Error()) + "\n\n"
 	}
 
-	if len(m.dataPreviewTable.Rows()) > 0 {
+	// Only show the table if it has both columns and rows, and they match
+	if len(m.dataPreviewTable.Columns()) > 0 && len(m.dataPreviewTable.Rows()) > 0 {
 		content += successStyle.Render(fmt.Sprintf("Showing first 10 rows from %s", m.selectedTable)) + "\n\n"
 		content += m.dataPreviewTable.View()
 	} else if m.err == nil {
@@ -778,14 +798,20 @@ func (m model) connectDB() tea.Cmd {
 			return connectResult{err: err}
 		}
 
-		// Get tables list
-		tables, err := getTables(db, m.selectedDB.driver)
+		// Get tables list with metadata
+		tableInfos, err := getTableInfos(db, m.selectedDB.driver)
 		if err != nil {
 			db.Close()
 			return connectResult{err: err}
 		}
 
-		return connectResult{db: db, tables: tables}
+		// Extract table names for backward compatibility
+		tables := make([]string, len(tableInfos))
+		for i, info := range tableInfos {
+			tables[i] = info.name
+		}
+
+		return connectResult{db: db, tables: tables, tableInfos: tableInfos}
 	}
 }
 
@@ -908,9 +934,10 @@ func (m model) executeQuery(query string) tea.Cmd {
 
 // Result messages
 type connectResult struct {
-	db     *sql.DB
-	tables []string
-	err    error
+	db         *sql.DB
+	tables     []string
+	tableInfos []tableInfo
+	err        error
 }
 
 type columnsResult struct {
@@ -952,15 +979,16 @@ func (m model) handleConnectResult(msg connectResult) (model, tea.Cmd) {
 
 	m.db = msg.db
 	m.tables = msg.tables
+	m.tableInfos = msg.tableInfos
 	m.err = nil
 	m.state = tablesView
 
-	// Create items for tables list
-	items := make([]list.Item, len(msg.tables))
-	for i, table := range msg.tables {
+	// Create items for tables list with metadata
+	items := make([]list.Item, len(msg.tableInfos))
+	for i, tableInfo := range msg.tableInfos {
 		items[i] = item{
-			title: table,
-			desc:  "View table structure",
+			title: tableInfo.name,
+			desc:  tableInfo.description,
 		}
 	}
 	m.tablesList.SetItems(items)
@@ -1045,8 +1073,8 @@ func (m model) handleQueryResult(msg queryResult) (model, tea.Cmd) {
 			}
 		}
 
-		// Create rows for the table with proper column count validation
-		rows := make([]table.Row, 0, len(msg.rows))
+		// Create rows for the table with extra defensive validation
+		rows := make([]table.Row, 0)
 		expectedColumnCount := len(msg.columns)
 		
 		for _, row := range msg.rows {
@@ -1055,23 +1083,51 @@ func (m model) handleQueryResult(msg queryResult) (model, tea.Cmd) {
 				continue
 			}
 			
+			// Ensure the row has the exact number of columns expected
 			tableRow := make(table.Row, expectedColumnCount)
-			for j, val := range row {
-				// Double-check bounds to prevent panic
-				if j >= expectedColumnCount {
-					break
+			validRow := true
+			
+			for j := 0; j < expectedColumnCount; j++ {
+				if j < len(row) {
+					val := row[j]
+					// Truncate long values for display
+					if len(val) > 23 {
+						val = val[:20] + "..."
+					}
+					tableRow[j] = val
+				} else {
+					// This shouldn't happen due to our validation, but just in case
+					tableRow[j] = "NULL"
+					validRow = false
 				}
-				// Truncate long values for display
-				if len(val) > 23 {
-					val = val[:20] + "..."
-				}
-				tableRow[j] = val
 			}
-			rows = append(rows, tableRow)
+			
+			// Only add valid rows
+			if validRow {
+				rows = append(rows, tableRow)
+			}
 		}
 
-		m.queryResultsTable.SetColumns(columns)
-		m.queryResultsTable.SetRows(rows)
+		// Recreate the table with proper initialization to avoid any state issues
+		s := table.DefaultStyles()
+		s.Header = s.Header.
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("240")).
+			BorderBottom(true).
+			Bold(true)
+		s.Selected = s.Selected.
+			Foreground(lipgloss.Color("229")).
+			Background(lipgloss.Color("57")).
+			Bold(false)
+
+		m.queryResultsTable = table.New(
+			table.WithColumns(columns),
+			table.WithRows(rows),
+			table.WithFocused(true),
+			table.WithHeight(10),
+		)
+		m.queryResultsTable.SetStyles(s)
+		
 		m.queryResult = fmt.Sprintf("Query returned %d rows", len(rows))
 		
 		// Ensure query input has focus after query execution
@@ -1118,35 +1174,76 @@ func (m model) handleDataPreviewResult(msg dataPreviewResult) (model, tea.Cmd) {
 		}
 	}
 
-	// Create rows for the table with proper column count validation
-	rows := make([]table.Row, 0, len(msg.rows))
+	// Create rows for the table with extra defensive validation
+	rows := make([]table.Row, 0)
 	expectedColumnCount := len(msg.columns)
+	
+	// Ensure we have at least one column to avoid empty table issues
+	if expectedColumnCount == 0 {
+		m.err = fmt.Errorf("no columns available for preview")
+		return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
+			return clearErrorMsg{}
+		})
+	}
 	
 	for _, row := range msg.rows {
 		// Skip rows that don't match the expected column count
 		if len(row) != expectedColumnCount {
-			// Log the issue but continue with other rows
 			continue
 		}
 		
+		// Ensure the row has the exact number of columns expected
 		tableRow := make(table.Row, expectedColumnCount)
-		for j, val := range row {
-			// Double-check bounds to prevent panic
-			if j >= expectedColumnCount {
-				break
+		validRow := true
+		
+		for j := 0; j < expectedColumnCount; j++ {
+			if j < len(row) {
+				val := row[j]
+				// Truncate long values for display
+				if len(val) > 23 {
+					val = val[:20] + "..."
+				}
+				tableRow[j] = val
+			} else {
+				// This shouldn't happen due to our validation, but just in case
+				tableRow[j] = "NULL"
+				validRow = false
 			}
-			// Truncate long values for display
-			if len(val) > 23 {
-				val = val[:20] + "..."
-			}
-			tableRow[j] = val
 		}
-		rows = append(rows, tableRow)
+		
+		// Only add valid rows
+		if validRow {
+			rows = append(rows, tableRow)
+		}
+	}
+	
+	// Ensure we have at least some data to display
+	if len(rows) == 0 {
+		m.err = fmt.Errorf("no valid data rows found for preview")
+		return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
+			return clearErrorMsg{}
+		})
 	}
 
-	// Set columns first, then rows
-	m.dataPreviewTable.SetColumns(columns)
-	m.dataPreviewTable.SetRows(rows)
+	// Recreate the table with proper initialization to avoid any state issues
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		BorderBottom(true).
+		Bold(true)
+	s.Selected = s.Selected.
+		Foreground(lipgloss.Color("229")).
+		Background(lipgloss.Color("57")).
+		Bold(false)
+
+	m.dataPreviewTable = table.New(
+		table.WithColumns(columns),
+		table.WithRows(rows),
+		table.WithFocused(true),
+		table.WithHeight(10),
+	)
+	m.dataPreviewTable.SetStyles(s)
 
 	return m, nil
 }
@@ -1180,6 +1277,135 @@ func getTables(db *sql.DB, driver string) ([]string, error) {
 	}
 
 	return tables, nil
+}
+
+func getTableInfos(db *sql.DB, driver string) ([]tableInfo, error) {
+	var tableInfos []tableInfo
+	
+	switch driver {
+	case "postgres":
+		query := `
+			SELECT 
+				t.tablename as table_name,
+				'BASE TABLE' as table_type,
+				COALESCE(s.n_tup_ins + s.n_tup_upd - s.n_tup_del, 0) as estimated_rows
+			FROM pg_tables t
+			LEFT JOIN pg_stat_user_tables s ON t.tablename = s.relname
+			WHERE t.schemaname = 'public'
+			ORDER BY t.tablename`
+		
+		rows, err := db.Query(query)
+		if err != nil {
+			// Fallback to simple table list if stats are not available
+			return getSimpleTableInfos(db, driver)
+		}
+		defer rows.Close()
+		
+		for rows.Next() {
+			var info tableInfo
+			var estimatedRows sql.NullInt64
+			err := rows.Scan(&info.name, &info.tableType, &estimatedRows)
+			if err != nil {
+				continue
+			}
+			
+			if estimatedRows.Valid {
+				info.rowCount = estimatedRows.Int64
+				if info.rowCount < 0 {
+					info.rowCount = 0
+				}
+				info.description = fmt.Sprintf("Table • ~%d rows", info.rowCount)
+			} else {
+				info.description = "Table"
+			}
+			
+			tableInfos = append(tableInfos, info)
+		}
+		
+	case "mysql":
+		query := `
+			SELECT 
+				TABLE_NAME,
+				TABLE_TYPE,
+				COALESCE(TABLE_ROWS, 0) as table_rows
+			FROM INFORMATION_SCHEMA.TABLES 
+			WHERE TABLE_SCHEMA = DATABASE()
+			ORDER BY TABLE_NAME`
+		
+		rows, err := db.Query(query)
+		if err != nil {
+			return getSimpleTableInfos(db, driver)
+		}
+		defer rows.Close()
+		
+		for rows.Next() {
+			var info tableInfo
+			var tableRows sql.NullInt64
+			err := rows.Scan(&info.name, &info.tableType, &tableRows)
+			if err != nil {
+				continue
+			}
+			
+			if tableRows.Valid && tableRows.Int64 > 0 {
+				info.rowCount = tableRows.Int64
+				info.description = fmt.Sprintf("Table • ~%d rows", info.rowCount)
+			} else {
+				info.description = "Table"
+			}
+			
+			tableInfos = append(tableInfos, info)
+		}
+		
+	case "sqlite3":
+		// SQLite doesn't have built-in row count stats, so we'll get table names and count separately
+		tables, err := getTables(db, driver)
+		if err != nil {
+			return nil, err
+		}
+		
+		for _, tableName := range tables {
+			info := tableInfo{
+				name:      tableName,
+				tableType: "table",
+			}
+			
+			// Try to get row count (this might be slow for large tables)
+			countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM "%s"`, tableName)
+			var count int64
+			err := db.QueryRow(countQuery).Scan(&count)
+			if err == nil {
+				info.rowCount = count
+				info.description = fmt.Sprintf("Table • %d rows", count)
+			} else {
+				info.description = "Table"
+			}
+			
+			tableInfos = append(tableInfos, info)
+		}
+		
+	default:
+		return getSimpleTableInfos(db, driver)
+	}
+	
+	return tableInfos, nil
+}
+
+func getSimpleTableInfos(db *sql.DB, driver string) ([]tableInfo, error) {
+	tables, err := getTables(db, driver)
+	if err != nil {
+		return nil, err
+	}
+	
+	var tableInfos []tableInfo
+	for _, tableName := range tables {
+		tableInfos = append(tableInfos, tableInfo{
+			name:        tableName,
+			tableType:   "table",
+			description: "Table",
+		})
+	}
+	
+	return tableInfos, nil
 }
 
 func getColumns(db *sql.DB, driver, tableName string) ([][]string, error) {
