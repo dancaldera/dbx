@@ -7,7 +7,9 @@ A terminal-based database explorer built with Go and Bubble Tea. DBX provides an
 - **Multi-database support**: PostgreSQL, MySQL, and SQLite
 - **Interactive TUI**: Clean, keyboard-driven interface
 - **Database exploration**: Browse tables and view column details
-- **Connection management**: Easy switching between database connections
+- **Connection management**: Save, edit, delete, and switch between database connections
+- **Data preview**: Quick view of table contents without writing SQL
+- **SQL query execution**: Run custom queries with formatted table results
 
 ## Installation
 
@@ -33,7 +35,11 @@ Run the application:
 - **↑/↓**: Navigate through lists and tables
 - **Enter**: Select item or confirm action
 - **Esc**: Go back to previous screen
-- **n**: Start new database connection
+- **p**: Preview table data (first 10 rows)
+- **r**: Run custom SQL query
+- **s**: Save database connection
+- **e**: Edit saved connection (in saved connections view)
+- **d**: Delete saved connection (in saved connections view)
 - **q** or **Ctrl+C**: Quit application
 
 ### Connection Strings
@@ -58,7 +64,8 @@ username:password@tcp(localhost:3306)/database_name
 1. **Select Database Type**: Choose from PostgreSQL, MySQL, or SQLite
 2. **Enter Connection String**: Provide the appropriate connection string for your database
 3. **Browse Tables**: View all available tables in the connected database
-4. **Explore Columns**: Select a table to see its column structure, types, and constraints
+4. **Explore Data**: Preview table data (first 10 rows) or view column structure
+5. **Run Queries**: Execute custom SQL queries with formatted table results
 
 ## Dependencies
 
@@ -95,7 +102,7 @@ go vet ./...
 - [x] 1. Connection persistence - Save and load database connections
 - [x] 2. Query execution - Run custom SQL queries within the TUI
 - [x] 3. Result display - Show query results in paginated table format
-- [ ] 4. Table data preview - Show sample rows from selected tables
+- [x] 4. Table data preview - Show sample rows from selected tables
 - [ ] 5. Export functionality - Export query results to CSV/JSON
 - [ ] 6. Connection testing - Validate connections before saving
 - [ ] 7. Error handling improvements - Better error messages and recovery

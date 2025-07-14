@@ -55,9 +55,11 @@ const (
 	savedConnectionsView
 	connectionView
 	saveConnectionView
+	editConnectionView
 	tablesView
 	columnsView
 	queryView
+	dataPreviewView
 )
 
 // Saved connection
@@ -99,6 +101,7 @@ type model struct {
 	tablesList           list.Model
 	columnsTable         table.Model
 	queryResultsTable    table.Model
+	dataPreviewTable     table.Model
 	selectedDB           dbType
 	connectionStr        string
 	db                   *sql.DB
@@ -106,6 +109,7 @@ type model struct {
 	tables               []string
 	selectedTable        string
 	savedConnections     []SavedConnection
+	editingConnectionIdx int
 	queryResult          string
 	width                int
 	height               int
@@ -206,6 +210,14 @@ func initialModel() model {
 	)
 	queryResultsTable.SetStyles(s)
 
+	// Data preview table
+	dataPreviewTable := table.New(
+		table.WithColumns([]table.Column{}),
+		table.WithFocused(true),
+		table.WithHeight(10),
+	)
+	dataPreviewTable.SetStyles(s)
+
 	return model{
 		state:                dbTypeView,
 		dbTypeList:           dbList,
@@ -216,7 +228,9 @@ func initialModel() model {
 		tablesList:           tablesList,
 		columnsTable:         t,
 		queryResultsTable:    queryResultsTable,
+		dataPreviewTable:     dataPreviewTable,
 		savedConnections:     savedConnections,
+		editingConnectionIdx: -1,
 	}
 }
 
@@ -235,6 +249,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleColumnsResult(msg)
 	case queryResult:
 		return m.handleQueryResult(msg)
+	case dataPreviewResult:
+		return m.handleDataPreviewResult(msg)
 	case clearResultMsg:
 		m.queryResult = ""
 		return m, nil
@@ -309,11 +325,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case saveConnectionView:
 				m.state = connectionView
 				m.err = nil
+			case editConnectionView:
+				m.state = savedConnectionsView
+				m.err = nil
+				m.editingConnectionIdx = -1
 			case tablesView:
 				m.state = connectionView
 			case columnsView:
 				m.state = tablesView
 			case queryView:
+				m.state = tablesView
+			case dataPreviewView:
 				m.state = tablesView
 			}
 			return m, nil
@@ -344,6 +366,61 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.queryInput.Focus()
 				m.queryResultsTable.Blur()
 				return m, nil
+			}
+
+		case "p":
+			if m.state == tablesView && m.db != nil {
+				// Preview table data
+				if i, ok := m.tablesList.SelectedItem().(item); ok {
+					m.selectedTable = i.title
+					return m, m.loadDataPreview()
+				}
+			}
+
+		case "e":
+			if m.state == savedConnectionsView && len(m.savedConnections) > 0 {
+				// Edit selected connection
+				if i, ok := m.savedConnectionsList.SelectedItem().(item); ok {
+					// Find connection by name
+					for idx, conn := range m.savedConnections {
+						if conn.Name == i.title {
+							m.editingConnectionIdx = idx
+							// Set up edit form with existing values
+							conn := m.savedConnections[idx]
+							m.nameInput.SetValue(conn.Name)
+							m.textInput.SetValue(conn.ConnectionStr)
+							// Set selected DB type
+							for _, db := range dbTypes {
+								if db.driver == conn.Driver {
+									m.selectedDB = db
+									break
+								}
+							}
+							m.state = editConnectionView
+							m.nameInput.Focus()
+							return m, nil
+						}
+					}
+				}
+			}
+
+		case "d":
+			if m.state == savedConnectionsView && len(m.savedConnections) > 0 {
+				// Delete selected connection
+				if i, ok := m.savedConnectionsList.SelectedItem().(item); ok {
+					// Find and remove connection by name
+					for idx, conn := range m.savedConnections {
+						if conn.Name == i.title {
+							// Remove connection from slice
+							m.savedConnections = append(m.savedConnections[:idx], m.savedConnections[idx+1:]...)
+							// Save updated connections
+							saveConnections(m.savedConnections)
+							// Update the list
+							m = m.updateSavedConnectionsList()
+							return m, nil
+						}
+					}
+				}
 			}
 
 		case "enter":
@@ -410,6 +487,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
+			case editConnectionView:
+				name := m.nameInput.Value()
+				connectionStr := m.textInput.Value()
+				if name != "" && connectionStr != "" && m.editingConnectionIdx >= 0 {
+					// Update the existing connection
+					m.savedConnections[m.editingConnectionIdx] = SavedConnection{
+						Name:          name,
+						Driver:        m.selectedDB.driver,
+						ConnectionStr: connectionStr,
+					}
+					saveConnections(m.savedConnections)
+					m = m.updateSavedConnectionsList()
+					m.state = savedConnectionsView
+					m.editingConnectionIdx = -1
+					return m, nil
+				}
+
 			case tablesView:
 				if i, ok := m.tablesList.SelectedItem().(item); ok {
 					m.selectedTable = i.title
@@ -435,6 +529,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textInput, cmd = m.textInput.Update(msg)
 	case saveConnectionView:
 		m.nameInput, cmd = m.nameInput.Update(msg)
+	case editConnectionView:
+		// Handle focus between name and connection string inputs
+		if msg, ok := msg.(tea.KeyMsg); ok {
+			switch msg.String() {
+			case "tab":
+				if m.nameInput.Focused() {
+					m.nameInput.Blur()
+					m.textInput.Focus()
+				} else {
+					m.textInput.Blur()
+					m.nameInput.Focus()
+				}
+				return m, nil
+			}
+		}
+		
+		// Update the focused input
+		if m.nameInput.Focused() {
+			m.nameInput, cmd = m.nameInput.Update(msg)
+		} else {
+			m.textInput, cmd = m.textInput.Update(msg)
+		}
 	case queryView:
 		// Handle focus between query input and results table
 		if msg, ok := msg.(tea.KeyMsg); ok {
@@ -466,6 +582,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tablesList, cmd = m.tablesList.Update(msg)
 	case columnsView:
 		m.columnsTable, cmd = m.columnsTable.Update(msg)
+	case dataPreviewView:
+		m.dataPreviewTable, cmd = m.dataPreviewTable.Update(msg)
 	}
 
 	return m, cmd
@@ -481,12 +599,16 @@ func (m model) View() string {
 		return m.connectionView()
 	case saveConnectionView:
 		return m.saveConnectionView()
+	case editConnectionView:
+		return m.editConnectionView()
 	case tablesView:
 		return m.tablesView()
 	case columnsView:
 		return m.columnsView()
 	case queryView:
 		return m.queryView()
+	case dataPreviewView:
+		return m.dataPreviewView()
 	}
 	return ""
 }
@@ -508,7 +630,7 @@ func (m model) savedConnectionsView() string {
 		content += m.savedConnectionsList.View()
 	}
 
-	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: connect • esc: back")
+	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: connect • e: edit • d: delete • esc: back")
 	return docStyle.Render(content)
 }
 
@@ -519,6 +641,34 @@ func (m model) saveConnectionView() string {
 	content += "Connection to save:\n"
 	content += helpStyle.Render(fmt.Sprintf("%s: %s", m.selectedDB.name, m.connectionStr))
 	content += "\n\n" + helpStyle.Render("enter: save • esc: cancel")
+	return docStyle.Render(content)
+}
+
+func (m model) editConnectionView() string {
+	content := titleStyle.Render("Edit Connection") + "\n\n"
+	
+	if m.err != nil {
+		content += errorStyle.Render("❌ Error: "+m.err.Error()) + "\n\n"
+	}
+	
+	content += "Connection name:\n"
+	content += m.nameInput.View() + "\n\n"
+	
+	content += fmt.Sprintf("Database type: %s\n", m.selectedDB.name)
+	content += "Connection string:\n"
+	content += m.textInput.View() + "\n\n"
+	
+	content += "Examples:\n"
+	switch m.selectedDB.driver {
+	case "postgres":
+		content += helpStyle.Render("postgres://user:password@localhost/dbname?sslmode=disable")
+	case "mysql":
+		content += helpStyle.Render("user:password@tcp(localhost:3306)/dbname")
+	case "sqlite3":
+		content += helpStyle.Render("./database.db or /path/to/database.db")
+	}
+	
+	content += "\n\n" + helpStyle.Render("enter: save changes • tab: switch fields • esc: cancel")
 	return docStyle.Render(content)
 }
 
@@ -556,7 +706,7 @@ func (m model) tablesView() string {
 		content += m.tablesList.View()
 	}
 
-	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: view columns • r: run query • s: save connection • esc: back")
+	content += "\n" + helpStyle.Render("↑/↓: navigate • enter: view columns • p: preview data • r: run query • s: save connection • esc: back")
 	return docStyle.Render(content)
 }
 
@@ -596,6 +746,24 @@ func (m model) queryView() string {
 	return docStyle.Render(content)
 }
 
+func (m model) dataPreviewView() string {
+	content := titleStyle.Render(fmt.Sprintf("Data Preview: %s", m.selectedTable)) + "\n\n"
+
+	if m.err != nil {
+		content += errorStyle.Render("❌ Error: "+m.err.Error()) + "\n\n"
+	}
+
+	if len(m.dataPreviewTable.Rows()) > 0 {
+		content += successStyle.Render(fmt.Sprintf("Showing first 10 rows from %s", m.selectedTable)) + "\n\n"
+		content += m.dataPreviewTable.View()
+	} else if m.err == nil {
+		content += helpStyle.Render("Loading data preview...")
+	}
+
+	content += "\n\n" + helpStyle.Render("↑/↓: navigate rows • esc: back to tables")
+	return docStyle.Render(content)
+}
+
 // Command to connect to database
 func (m model) connectDB() tea.Cmd {
 	return func() tea.Msg {
@@ -629,6 +797,65 @@ func (m model) loadColumns() tea.Cmd {
 			return columnsResult{err: err}
 		}
 		return columnsResult{columns: columns}
+	}
+}
+
+// Command to load data preview
+func (m model) loadDataPreview() tea.Cmd {
+	return func() tea.Msg {
+		// Build query with proper table name quoting based on database type
+		var query string
+		switch m.selectedDB.driver {
+		case "postgres":
+			query = fmt.Sprintf(`SELECT * FROM "%s" LIMIT 10`, m.selectedTable)
+		case "mysql":
+			query = fmt.Sprintf("SELECT * FROM `%s` LIMIT 10", m.selectedTable)
+		case "sqlite3":
+			query = fmt.Sprintf(`SELECT * FROM "%s" LIMIT 10`, m.selectedTable)
+		default:
+			query = fmt.Sprintf("SELECT * FROM %s LIMIT 10", m.selectedTable)
+		}
+		rows, err := m.db.Query(query)
+		if err != nil {
+			return dataPreviewResult{err: err}
+		}
+		defer rows.Close()
+
+		// Get column names
+		columns, err := rows.Columns()
+		if err != nil {
+			return dataPreviewResult{err: err}
+		}
+
+		// Get all rows
+		var results [][]string
+		for rows.Next() {
+			// Create slice to hold column values
+			values := make([]interface{}, len(columns))
+			valuePtrs := make([]interface{}, len(columns))
+
+			for i := range values {
+				valuePtrs[i] = &values[i]
+			}
+
+			err := rows.Scan(valuePtrs...)
+			if err != nil {
+				return dataPreviewResult{err: err}
+			}
+
+			// Convert to strings
+			strValues := make([]string, len(columns))
+			for i, val := range values {
+				if val != nil {
+					strValues[i] = fmt.Sprintf("%v", val)
+				} else {
+					strValues[i] = "NULL"
+				}
+			}
+			results = append(results, strValues)
+		}
+
+		return dataPreviewResult{columns: columns, rows: results}
 	}
 }
 
@@ -692,6 +919,12 @@ type columnsResult struct {
 }
 
 type queryResult struct {
+	columns []string
+	rows    [][]string
+	err     error
+}
+
+type dataPreviewResult struct {
 	columns []string
 	rows    [][]string
 	err     error
@@ -782,6 +1015,20 @@ func (m model) handleQueryResult(msg queryResult) (model, tea.Cmd) {
 		// Start timeout to clear the message
 		return m, clearResultAfterTimeout()
 	} else {
+		// Validate that we have columns
+		if len(msg.columns) == 0 {
+			m.queryResult = "Query executed successfully but returned no columns."
+			m.queryResultsTable.SetColumns([]table.Column{})
+			m.queryResultsTable.SetRows([]table.Row{})
+			
+			// Ensure query input has focus after query execution
+			m.queryInput.Focus()
+			m.queryResultsTable.Blur()
+			
+			// Start timeout to clear the message
+			return m, clearResultAfterTimeout()
+		}
+
 		// Create columns for the table
 		columns := make([]table.Column, len(msg.columns))
 		for i, col := range msg.columns {
@@ -798,23 +1045,34 @@ func (m model) handleQueryResult(msg queryResult) (model, tea.Cmd) {
 			}
 		}
 
-		// Create rows for the table
-		rows := make([]table.Row, len(msg.rows))
-		for i, row := range msg.rows {
-			tableRow := make(table.Row, len(row))
+		// Create rows for the table with proper column count validation
+		rows := make([]table.Row, 0, len(msg.rows))
+		expectedColumnCount := len(msg.columns)
+		
+		for _, row := range msg.rows {
+			// Skip rows that don't match the expected column count
+			if len(row) != expectedColumnCount {
+				continue
+			}
+			
+			tableRow := make(table.Row, expectedColumnCount)
 			for j, val := range row {
+				// Double-check bounds to prevent panic
+				if j >= expectedColumnCount {
+					break
+				}
 				// Truncate long values for display
 				if len(val) > 23 {
 					val = val[:20] + "..."
 				}
 				tableRow[j] = val
 			}
-			rows[i] = tableRow
+			rows = append(rows, tableRow)
 		}
 
 		m.queryResultsTable.SetColumns(columns)
 		m.queryResultsTable.SetRows(rows)
-		m.queryResult = fmt.Sprintf("Query returned %d rows", len(msg.rows))
+		m.queryResult = fmt.Sprintf("Query returned %d rows", len(rows))
 		
 		// Ensure query input has focus after query execution
 		m.queryInput.Focus()
@@ -822,6 +1080,75 @@ func (m model) handleQueryResult(msg queryResult) (model, tea.Cmd) {
 
 		return m, nil
 	}
+}
+
+func (m model) handleDataPreviewResult(msg dataPreviewResult) (model, tea.Cmd) {
+	if msg.err != nil {
+		m.err = msg.err
+		// Start timeout to clear the error message
+		return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
+			return clearErrorMsg{}
+		})
+	}
+
+	m.err = nil
+	m.state = dataPreviewView
+
+	// Validate that we have columns
+	if len(msg.columns) == 0 {
+		m.err = fmt.Errorf("no columns returned from query")
+		return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
+			return clearErrorMsg{}
+		})
+	}
+
+	// Create columns for the table
+	columns := make([]table.Column, len(msg.columns))
+	for i, col := range msg.columns {
+		width := 15 // Default width
+		if len(col) > 15 {
+			width = len(col) + 2
+		}
+		if width > 25 {
+			width = 25 // Max width to prevent overflow
+		}
+		columns[i] = table.Column{
+			Title: col,
+			Width: width,
+		}
+	}
+
+	// Create rows for the table with proper column count validation
+	rows := make([]table.Row, 0, len(msg.rows))
+	expectedColumnCount := len(msg.columns)
+	
+	for _, row := range msg.rows {
+		// Skip rows that don't match the expected column count
+		if len(row) != expectedColumnCount {
+			// Log the issue but continue with other rows
+			continue
+		}
+		
+		tableRow := make(table.Row, expectedColumnCount)
+		for j, val := range row {
+			// Double-check bounds to prevent panic
+			if j >= expectedColumnCount {
+				break
+			}
+			// Truncate long values for display
+			if len(val) > 23 {
+				val = val[:20] + "..."
+			}
+			tableRow[j] = val
+		}
+		rows = append(rows, tableRow)
+	}
+
+	// Set columns first, then rows
+	m.dataPreviewTable.SetColumns(columns)
+	m.dataPreviewTable.SetRows(rows)
+
+	return m, nil
 }
 
 // Helper functions for getting database information
