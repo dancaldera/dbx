@@ -134,7 +134,23 @@ var (
 			BorderForeground(accentMagenta).
 			Padding(1, 2).
 			Margin(0, 0, 1, 0)
+
+	// Loading indicator style
+	loadingStyle = lipgloss.NewStyle().
+			Foreground(accentMagenta).
+			Bold(true).
+			Italic(true)
 )
+
+// Helper function to get loading text with spinner
+func getLoadingText(message string) string {
+	// Simple rotating spinner
+	spinners := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	// Use a simple counter based approach for demonstration
+	// In a real app, you'd use time-based animation
+	spinnerIndex := 0 // This could be animated with a ticker
+	return loadingStyle.Render(spinners[spinnerIndex] + " " + message)
+}
 
 // Helper function to get magenta-themed table styles
 func getMagentaTableStyles() table.Styles {
@@ -229,6 +245,14 @@ type model struct {
 	queryResult          string
 	width                int
 	height               int
+	// Loading states
+	isTestingConnection  bool
+	isConnecting         bool
+	isSavingConnection   bool
+	isLoadingTables      bool
+	isLoadingColumns     bool
+	isExecutingQuery     bool
+	isLoadingPreview     bool
 }
 
 func initialModel() model {
@@ -472,20 +496,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "f1":
-			if m.state == connectionView {
+			if m.state == connectionView && !m.isTestingConnection {
 				// Test connection
 				m.connectionStr = m.textInput.Value()
 				if m.connectionStr != "" {
+					m.isTestingConnection = true
+					m.err = nil
+					m.queryResult = ""
 					return m, m.testConnection()
 				}
 			}
 
 		case "f2":
-			if m.state == connectionView {
+			if m.state == connectionView && !m.isSavingConnection && !m.isConnecting {
 				// Save connection directly with both name and connection string
 				name := m.nameInput.Value()
 				connectionStr := m.textInput.Value()
 				if name != "" && connectionStr != "" {
+					m.isSavingConnection = true
+					m.err = nil
+					m.queryResult = ""
 					newConnection := SavedConnection{
 						Name:          name,
 						Driver:        m.selectedDB.driver,
@@ -495,6 +525,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					saveConnections(m.savedConnections)
 					// Connect to the database and go to tables view
 					m.connectionStr = connectionStr
+					m.isSavingConnection = false
+					m.isConnecting = true
 					return m, m.connectDB()
 				}
 			}
@@ -510,10 +542,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "p":
-			if m.state == tablesView && m.db != nil {
+			if m.state == tablesView && m.db != nil && !m.isLoadingPreview {
 				// Preview table data
 				if i, ok := m.tablesList.SelectedItem().(item); ok {
 					m.selectedTable = i.title
+					m.isLoadingPreview = true
+					m.err = nil
 					return m, m.loadDataPreview()
 				}
 			}
@@ -591,7 +625,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case savedConnectionsView:
-				if i, ok := m.savedConnectionsList.SelectedItem().(item); ok {
+				if i, ok := m.savedConnectionsList.SelectedItem().(item); ok && !m.isConnecting {
 					// Find saved connection by name
 					for _, conn := range m.savedConnections {
 						if conn.Name == i.title {
@@ -603,6 +637,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								}
 							}
 							m.connectionStr = conn.ConnectionStr
+							m.isConnecting = true
+							m.err = nil
 							return m, m.connectDB()
 						}
 					}
@@ -642,14 +678,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case tablesView:
-				if i, ok := m.tablesList.SelectedItem().(item); ok {
+				if i, ok := m.tablesList.SelectedItem().(item); ok && !m.isLoadingColumns {
 					m.selectedTable = i.title
+					m.isLoadingColumns = true
+					m.err = nil
 					return m, m.loadColumns()
 				}
 
 			case queryView:
 				query := m.queryInput.Value()
-				if query != "" {
+				if query != "" && !m.isExecutingQuery {
+					m.isExecutingQuery = true
+					m.err = nil
+					m.queryResult = ""
 					return m, m.executeQuery(query)
 				}
 			}
@@ -787,7 +828,10 @@ func (m model) dbTypeView() string {
 func (m model) savedConnectionsView() string {
 	var content string
 	
-	if len(m.savedConnections) == 0 {
+	if m.isConnecting {
+		loadingMsg := getLoadingText("Connecting to saved connection...")
+		content = m.savedConnectionsList.View() + "\n" + loadingMsg
+	} else if len(m.savedConnections) == 0 {
 		emptyMsg := infoStyle.Render("📝 No saved connections yet.\n\nGo back and create your first connection!")
 		content = m.savedConnectionsList.View() + "\n" + emptyMsg
 	} else {
@@ -859,7 +903,13 @@ func (m model) connectionView() string {
 	title := titleStyle.Render(fmt.Sprintf("%s  Connect to %s", dbIcon, m.selectedDB.name))
 	
 	var messageContent string
-	if m.err != nil {
+	if m.isTestingConnection {
+		messageContent = getLoadingText("Testing connection...")
+	} else if m.isSavingConnection {
+		messageContent = getLoadingText("Saving connection...")
+	} else if m.isConnecting {
+		messageContent = getLoadingText("Connecting to database...")
+	} else if m.err != nil {
 		messageContent = errorStyle.Render("❌ " + m.err.Error())
 	} else if m.queryResult != "" {
 		messageContent = successStyle.Render(m.queryResult)
@@ -929,7 +979,13 @@ func (m model) connectionView() string {
 func (m model) tablesView() string {
 	var content string
 	
-	if len(m.tables) == 0 {
+	if m.isLoadingColumns {
+		loadingMsg := getLoadingText("Loading table columns...")
+		content = m.tablesList.View() + "\n" + loadingMsg
+	} else if m.isLoadingPreview {
+		loadingMsg := getLoadingText("Loading table data preview...")
+		content = m.tablesList.View() + "\n" + loadingMsg
+	} else if len(m.tables) == 0 {
 		emptyMsg := infoStyle.Render("📋 No tables found in this database.\n\nThe database might be empty or you might not have sufficient permissions.")
 		content = m.tablesList.View() + "\n" + emptyMsg
 	} else {
@@ -958,7 +1014,9 @@ func (m model) queryView() string {
 	title := titleStyle.Render("⚡  SQL Query Runner")
 	
 	var messageContent string
-	if m.err != nil {
+	if m.isExecutingQuery {
+		messageContent = getLoadingText("Executing query...")
+	} else if m.err != nil {
 		messageContent = errorStyle.Render("❌ " + m.err.Error())
 	}
 	
@@ -1254,6 +1312,8 @@ func (m model) handleConnectResult(msg connectResult) (model, tea.Cmd) {
 		})
 	}
 
+	m.isConnecting = false
+	m.isSavingConnection = false
 	m.db = msg.db
 	m.tables = msg.tables
 	m.tableInfos = msg.tableInfos
@@ -1274,6 +1334,7 @@ func (m model) handleConnectResult(msg connectResult) (model, tea.Cmd) {
 }
 
 func (m model) handleTestConnectionResult(msg testConnectionResult) (model, tea.Cmd) {
+	m.isTestingConnection = false
 	if msg.err != nil {
 		m.err = msg.err
 		// Start timeout to clear the error message
@@ -1291,6 +1352,7 @@ func (m model) handleTestConnectionResult(msg testConnectionResult) (model, tea.
 }
 
 func (m model) handleColumnsResult(msg columnsResult) (model, tea.Cmd) {
+	m.isLoadingColumns = false
 	if msg.err != nil {
 		m.err = msg.err
 		// Start timeout to clear the error message
@@ -1313,6 +1375,7 @@ func (m model) handleColumnsResult(msg columnsResult) (model, tea.Cmd) {
 }
 
 func (m model) handleQueryResult(msg queryResult) (model, tea.Cmd) {
+	m.isExecutingQuery = false
 	if msg.err != nil {
 		m.err = msg.err
 		// Start timeout to clear the error message
@@ -1422,6 +1485,7 @@ func (m model) handleQueryResult(msg queryResult) (model, tea.Cmd) {
 }
 
 func (m model) handleDataPreviewResult(msg dataPreviewResult) (model, tea.Cmd) {
+	m.isLoadingPreview = false
 	if msg.err != nil {
 		m.err = msg.err
 		// Start timeout to clear the error message
