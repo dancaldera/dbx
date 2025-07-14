@@ -91,4 +91,4 @@ go vet ./...
 
 ## License
 
-This project is open source. Please check the license file for details.
+This project is licensed under the MIT License - see the [MIT License](https://opensource.org/licenses/MIT) for details.
