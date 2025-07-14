@@ -37,6 +37,7 @@ Run the application:
 - **Esc**: Go back to previous screen
 - **p**: Preview table data (first 10 rows)
 - **r**: Run custom SQL query
+- **Ctrl+F** or **/**: Search tables (in tables view) or columns (in columns view)
 - **F1**: Test database connection (in connection view)
 - **F2**: Validate, save and connect to database (in connection view)
 - **s**: Save database connection (from tables view)
@@ -150,7 +151,7 @@ go vet ./...
 - [x] 5. Export functionality - Export query results to CSV/JSON
 - [x] 6. Connection testing - Validate connections before saving
 - [x] 7. Error handling improvements - Better error messages and recovery
-- [ ] 8. Search functionality - Search tables and columns by name
+- [x] 8. Search functionality - Search tables and columns by name
 - [ ] 9. Query history - Save and recall previously executed queries
 
 ### Enhanced Database Support

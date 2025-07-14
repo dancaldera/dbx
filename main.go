@@ -260,6 +260,13 @@ type model struct {
 	lastPreviewRows      [][]string
 	// Spinner for animations
 	spinner              spinner.Model
+	// Search functionality
+	searchInput          textinput.Model
+	isSearchingTables    bool
+	isSearchingColumns   bool
+	originalTableItems   []list.Item
+	originalTableRows    []table.Row
+	searchTerm           string
 }
 
 func initialModel() model {
@@ -321,6 +328,12 @@ func initialModel() model {
 	qi.CharLimit = 1000
 	qi.Width = 80
 
+	// Search input
+	si := textinput.New()
+	si.Placeholder = "Type to search..."
+	si.CharLimit = 100
+	si.Width = 80
+
 	// Tables list
 	tablesList := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
 	tablesList.Title = "📊 Available Tables"
@@ -372,6 +385,7 @@ func initialModel() model {
 		textInput:            ti,
 		nameInput:            ni,
 		queryInput:           qi,
+		searchInput:          si,
 		tablesList:           tablesList,
 		columnsTable:         t,
 		queryResultsTable:    queryResultsTable,
@@ -421,6 +435,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textInput.Width = msg.Width - h - 4
 		m.nameInput.Width = msg.Width - h - 4
 		m.queryInput.Width = msg.Width - h - 4
+		m.searchInput.Width = msg.Width - h - 4
 
 		// Update query results table height
 		tableHeight := msg.Height - v - 15 // Reserve space for query input and help text
@@ -474,6 +489,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.err = nil
 				m.editingConnectionIdx = -1
 			case tablesView:
+				// Exit search mode if active
+				if m.isSearchingTables {
+					m.isSearchingTables = false
+					m.searchInput.Blur()
+					m.tablesList.SetItems(m.originalTableItems)
+					m.searchTerm = ""
+					return m, nil
+				}
 				// Close database connection and go back to main menu
 				if m.db != nil {
 					m.db.Close()
@@ -486,6 +509,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectedTable = ""
 				m.err = nil
 			case columnsView:
+				// Exit search mode if active
+				if m.isSearchingColumns {
+					m.isSearchingColumns = false
+					m.searchInput.Blur()
+					m.columnsTable.SetRows(m.originalTableRows)
+					m.searchTerm = ""
+					return m, nil
+				}
 				m.state = tablesView
 			case queryView:
 				m.state = tablesView
@@ -539,12 +570,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "r":
-			if (m.state == tablesView || m.state == columnsView) && m.db != nil {
+			// Don't trigger query view if we're in search mode
+			if (m.state == tablesView || m.state == columnsView) && m.db != nil && !m.isSearchingTables && !m.isSearchingColumns {
 				// Go to query view
 				m.state = queryView
 				m.queryInput.SetValue("")
 				m.queryInput.Focus()
 				m.queryResultsTable.Blur()
+				return m, nil
+			}
+
+		case "ctrl+f", "/":
+			// Toggle search mode for tables
+			if m.state == tablesView && !m.isSearchingTables {
+				m.isSearchingTables = true
+				m.originalTableItems = m.tablesList.Items() // Backup original items
+				m.searchInput.SetValue("")
+				m.searchInput.Focus()
+				m.searchTerm = ""
+				return m, nil
+			}
+			// Toggle search mode for columns
+			if m.state == columnsView && !m.isSearchingColumns {
+				m.isSearchingColumns = true
+				m.originalTableRows = m.columnsTable.Rows() // Backup original rows
+				m.searchInput.SetValue("")
+				m.searchInput.Focus()
+				m.searchTerm = ""
 				return m, nil
 			}
 
@@ -605,7 +657,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "p":
-			if m.state == tablesView && m.db != nil && !m.isLoadingPreview {
+			// Don't trigger preview if we're in search mode
+			if m.state == tablesView && m.db != nil && !m.isLoadingPreview && !m.isSearchingTables {
 				// Preview table data
 				if i, ok := m.tablesList.SelectedItem().(item); ok {
 					m.selectedTable = i.title
@@ -742,7 +795,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case tablesView:
-				if i, ok := m.tablesList.SelectedItem().(item); ok && !m.isLoadingColumns {
+				// Don't trigger table selection if we're in search mode
+				if i, ok := m.tablesList.SelectedItem().(item); ok && !m.isLoadingColumns && !m.isSearchingTables {
 					m.selectedTable = i.title
 					m.isLoadingColumns = true
 					m.err = nil
@@ -841,9 +895,64 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.queryInput, cmd = m.queryInput.Update(msg)
 		}
 	case tablesView:
-		m.tablesList, cmd = m.tablesList.Update(msg)
+		if m.isSearchingTables {
+			// Handle search input updates
+			if msg, ok := msg.(tea.KeyMsg); ok {
+				switch msg.String() {
+				case "enter":
+					// Finish searching and focus on filtered list
+					m.isSearchingTables = false
+					m.searchInput.Blur()
+					return m, nil
+				case "esc":
+					// This is handled in the main esc case above
+					// No need to handle here as it would be duplicate
+				}
+			}
+			
+			// Update search input and filter results
+			m.searchInput, cmd = m.searchInput.Update(msg)
+			
+			// Apply filter when search term changes
+			newSearchTerm := m.searchInput.Value()
+			if newSearchTerm != m.searchTerm {
+				m.searchTerm = newSearchTerm
+				filteredItems := m.filterTableItems(newSearchTerm)
+				m.tablesList.SetItems(filteredItems)
+			}
+		} else {
+			// Normal table list navigation
+			m.tablesList, cmd = m.tablesList.Update(msg)
+		}
 	case columnsView:
-		m.columnsTable, cmd = m.columnsTable.Update(msg)
+		if m.isSearchingColumns {
+			// Handle search input updates
+			if msg, ok := msg.(tea.KeyMsg); ok {
+				switch msg.String() {
+				case "enter":
+					// Finish searching and focus on filtered table
+					m.isSearchingColumns = false
+					m.searchInput.Blur()
+					return m, nil
+				case "esc":
+					// This is handled in the main esc case above
+				}
+			}
+			
+			// Update search input and filter results
+			m.searchInput, cmd = m.searchInput.Update(msg)
+			
+			// Apply filter when search term changes
+			newSearchTerm := m.searchInput.Value()
+			if newSearchTerm != m.searchTerm {
+				m.searchTerm = newSearchTerm
+				filteredRows := m.filterColumnRows(newSearchTerm)
+				m.columnsTable.SetRows(filteredRows)
+			}
+		} else {
+			// Normal column table navigation
+			m.columnsTable, cmd = m.columnsTable.Update(msg)
+		}
 	case dataPreviewView:
 		m.dataPreviewTable, cmd = m.dataPreviewTable.Update(msg)
 	default:
@@ -1047,34 +1156,119 @@ func (m model) connectionView() string {
 func (m model) tablesView() string {
 	var content string
 	
-	if m.isLoadingColumns {
-		loadingMsg := m.getLoadingText("Loading table columns...")
-		content = m.tablesList.View() + "\n" + loadingMsg
-	} else if m.isLoadingPreview {
-		loadingMsg := m.getLoadingText("Loading table data preview...")
-		content = m.tablesList.View() + "\n" + loadingMsg
-	} else if len(m.tables) == 0 {
-		emptyMsg := infoStyle.Render("📋 No tables found in this database.\n\nThe database might be empty or you might not have sufficient permissions.")
-		content = m.tablesList.View() + "\n" + emptyMsg
+	if m.isSearchingTables {
+		// Search mode - simplified with lots of spacing to ensure visibility
+		searchLabel := "🔍 Search Tables:"
+		var searchField string
+		if m.searchInput.Focused() {
+			searchField = inputFocusedStyle.Render(m.searchInput.View())
+		} else {
+			searchField = inputStyle.Render(m.searchInput.View())
+		}
+		
+		// Show search results count
+		searchCount := fmt.Sprintf("Showing %d of %d tables", 
+			len(m.tablesList.Items()), len(m.originalTableItems))
+		
+		// Simple string concatenation with lots of spacing
+		content = "\n\n\n\n\n" + // 5 empty lines at top
+			searchLabel + "\n" +
+			searchField + "\n" +
+			searchCount + "\n\n" +
+			m.tablesList.View()
 	} else {
-		statusText := successStyle.Render(fmt.Sprintf("✅ Connected successfully (%d tables found)", len(m.tables)))
-		content = "\n" + statusText + "\n\n" + m.tablesList.View()
+		// Normal view logic - status messages + table list
+		var elements []string
+		
+		if m.isLoadingColumns {
+			loadingMsg := m.getLoadingText("Loading table columns...")
+			elements = append(elements, m.tablesList.View())
+			elements = append(elements, loadingMsg)
+		} else if m.isLoadingPreview {
+			loadingMsg := m.getLoadingText("Loading table data preview...")
+			elements = append(elements, m.tablesList.View())
+			elements = append(elements, loadingMsg)
+		} else if len(m.tables) == 0 {
+			emptyMsg := infoStyle.Render("📋 No tables found in this database.\n\nThe database might be empty or you might not have sufficient permissions.")
+			elements = append(elements, m.tablesList.View())
+			elements = append(elements, emptyMsg)
+		} else {
+			statusText := successStyle.Render(fmt.Sprintf("✅ Connected successfully (%d tables found)", len(m.tables)))
+			elements = append(elements, statusText)
+			elements = append(elements, "") // Empty line
+			elements = append(elements, m.tablesList.View())
+		}
+		
+		content = lipgloss.JoinVertical(lipgloss.Left, elements...)
 	}
 	
-	helpText := helpStyle.Render(
-		keyStyle.Render("enter") + ": view columns • " +
-		keyStyle.Render("p") + ": preview data • " +
-		keyStyle.Render("r") + ": run query • " +
-		keyStyle.Render("esc") + ": disconnect",
-	)
+	// Update help text based on search mode
+	var helpText string
+	if m.isSearchingTables {
+		helpText = helpStyle.Render(
+			keyStyle.Render("enter") + ": finish search • " +
+			keyStyle.Render("esc") + ": cancel search")
+	} else {
+		helpText = helpStyle.Render(
+			keyStyle.Render("enter") + ": view columns • " +
+			keyStyle.Render("p") + ": preview data • " +
+			keyStyle.Render("r") + ": run query • " +
+			keyStyle.Render("Ctrl+F") + ": search • " +
+			keyStyle.Render("esc") + ": disconnect")
+	}
 	
 	return docStyle.Render(content + "\n" + helpText)
 }
 
 func (m model) columnsView() string {
 	content := titleStyle.Render(fmt.Sprintf("Columns of table: %s", m.selectedTable)) + "\n\n"
+	
+	// Add search input if in search mode
+	var searchElements []string
+	if m.isSearchingColumns {
+		searchLabel := subtitleStyle.Render("🔍 Search Columns:")
+		var searchField string
+		if m.searchInput.Focused() {
+			searchField = inputFocusedStyle.Render(m.searchInput.View())
+		} else {
+			searchField = inputStyle.Render(m.searchInput.View())
+		}
+		
+		// Show search results count
+		var searchInfo string
+		if len(m.originalTableRows) > 0 {
+			searchInfo = infoStyle.Render(fmt.Sprintf("Showing %d of %d columns", 
+				len(m.columnsTable.Rows()), len(m.originalTableRows)))
+		}
+		
+		searchElements = append(searchElements, searchLabel)
+		searchElements = append(searchElements, searchField)
+		if searchInfo != "" {
+			searchElements = append(searchElements, searchInfo)
+		}
+		searchElements = append(searchElements, "") // Empty line separator
+		
+		content += lipgloss.JoinVertical(lipgloss.Left, searchElements...)
+	}
+	
 	content += m.columnsTable.View()
-	content += "\n" + helpStyle.Render("↑/↓: navigate • r: run query • s: save connection • esc: back to tables")
+	
+	// Update help text based on search mode
+	var helpText string
+	if m.isSearchingColumns {
+		helpText = helpStyle.Render(
+			keyStyle.Render("enter") + ": finish search • " +
+			keyStyle.Render("esc") + ": cancel search")
+	} else {
+		helpText = helpStyle.Render(
+			keyStyle.Render("↑/↓") + ": navigate • " +
+			keyStyle.Render("r") + ": run query • " +
+			keyStyle.Render("Ctrl+F") + ": search • " +
+			keyStyle.Render("s") + ": save connection • " +
+			keyStyle.Render("esc") + ": back to tables")
+	}
+	
+	content += "\n" + helpText
 	return docStyle.Render(content)
 }
 
@@ -2053,6 +2247,52 @@ func (m model) updateSavedConnectionsList() model {
 	}
 	m.savedConnectionsList.SetItems(items)
 	return m
+}
+
+// Search functionality helper functions
+
+// Filter table items based on search term
+func (m model) filterTableItems(searchTerm string) []list.Item {
+	if searchTerm == "" {
+		return m.originalTableItems
+	}
+	
+	var filtered []list.Item
+	searchLower := strings.ToLower(searchTerm)
+	
+	for _, listItem := range m.originalTableItems {
+		if tableItem, ok := listItem.(item); ok {
+			// Search in both title (table name) and description
+			if strings.Contains(strings.ToLower(tableItem.title), searchLower) ||
+			   strings.Contains(strings.ToLower(tableItem.desc), searchLower) {
+				filtered = append(filtered, listItem)
+			}
+		}
+	}
+	
+	return filtered
+}
+
+// Filter column rows based on search term
+func (m model) filterColumnRows(searchTerm string) []table.Row {
+	if searchTerm == "" {
+		return m.originalTableRows
+	}
+	
+	var filtered []table.Row
+	searchLower := strings.ToLower(searchTerm)
+	
+	for _, row := range m.originalTableRows {
+		// Search across all columns (column name, type, null, default)
+		for _, cell := range row {
+			if strings.Contains(strings.ToLower(cell), searchLower) {
+				filtered = append(filtered, row)
+				break // Found match in this row, add it and move to next row
+			}
+		}
+	}
+	
+	return filtered
 }
 
 // Functions for saved connections management
