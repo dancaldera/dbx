@@ -37,7 +37,9 @@ Run the application:
 - **Esc**: Go back to previous screen
 - **p**: Preview table data (first 10 rows)
 - **r**: Run custom SQL query
-- **s**: Save database connection
+- **F1**: Test database connection (in connection view)
+- **F2**: Save database connection (in connection view)
+- **s**: Save database connection (from tables view)
 - **e**: Edit saved connection (in saved connections view)
 - **d**: Delete saved connection (in saved connections view)
 - **q** or **Ctrl+C**: Quit application

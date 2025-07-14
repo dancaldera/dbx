@@ -254,6 +254,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case connectResult:
 		return m.handleConnectResult(msg)
+	case testConnectionResult:
+		return m.handleTestConnectionResult(msg)
 	case columnsResult:
 		return m.handleColumnsResult(msg)
 	case queryResult:
@@ -369,12 +371,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m = m.updateSavedConnectionsList()
 				return m, nil
 			}
-			if (m.state == connectionView || m.state == tablesView || m.state == columnsView) && m.connectionStr != "" {
+			if (m.state == tablesView || m.state == columnsView) && m.connectionStr != "" {
 				// Go to connection naming view
 				m.state = saveConnectionView
 				m.nameInput.SetValue("")
 				m.nameInput.Focus()
 				return m, nil
+			}
+
+		case "f1":
+			if m.state == connectionView {
+				// Test connection
+				m.connectionStr = m.textInput.Value()
+				if m.connectionStr != "" {
+					return m, m.testConnection()
+				}
+			}
+
+		case "f2":
+			if m.state == connectionView {
+				// Save connection directly with both name and connection string
+				name := m.nameInput.Value()
+				connectionStr := m.textInput.Value()
+				if name != "" && connectionStr != "" {
+					newConnection := SavedConnection{
+						Name:          name,
+						Driver:        m.selectedDB.driver,
+						ConnectionStr: connectionStr,
+					}
+					m.savedConnections = append(m.savedConnections, newConnection)
+					saveConnections(m.savedConnections)
+					// Connect to the database and go to tables view
+					m.connectionStr = connectionStr
+					return m, m.connectDB()
+				}
 			}
 
 		case "r":
@@ -453,8 +483,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 					m.state = connectionView
+					m.nameInput.SetValue("")
 					m.textInput.SetValue("")
-					m.textInput.Focus()
+					m.nameInput.Focus()
 
 					// Set placeholder according to DB type
 					switch m.selectedDB.driver {
@@ -485,11 +516,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 
-			case connectionView:
-				m.connectionStr = m.textInput.Value()
-				if m.connectionStr != "" {
-					return m, m.connectDB()
-				}
 
 			case saveConnectionView:
 				name := m.nameInput.Value()
@@ -545,7 +571,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case savedConnectionsView:
 		m.savedConnectionsList, cmd = m.savedConnectionsList.Update(msg)
 	case connectionView:
-		m.textInput, cmd = m.textInput.Update(msg)
+		// Handle focus between name and connection string inputs
+		if msg, ok := msg.(tea.KeyMsg); ok {
+			switch msg.String() {
+			case "tab":
+				if m.nameInput.Focused() {
+					m.nameInput.Blur()
+					m.textInput.Focus()
+				} else {
+					m.textInput.Blur()
+					m.nameInput.Focus()
+				}
+				return m, nil
+			}
+		}
+		
+		// Update the focused input
+		if m.nameInput.Focused() {
+			m.nameInput, cmd = m.nameInput.Update(msg)
+		} else {
+			m.textInput, cmd = m.textInput.Update(msg)
+		}
 	case saveConnectionView:
 		m.nameInput, cmd = m.nameInput.Update(msg)
 	case editConnectionView:
@@ -698,6 +744,13 @@ func (m model) connectionView() string {
 		content += errorStyle.Render("❌ Error: "+m.err.Error()) + "\n\n"
 	}
 
+	if m.queryResult != "" {
+		content += successStyle.Render(m.queryResult) + "\n\n"
+	}
+
+	content += "Connection name:\n"
+	content += m.nameInput.View() + "\n\n"
+
 	content += "Connection string:\n"
 	content += m.textInput.View() + "\n\n"
 
@@ -711,7 +764,7 @@ func (m model) connectionView() string {
 		content += helpStyle.Render("./database.db or /path/to/database.db")
 	}
 
-	content += "\n\n" + helpStyle.Render("enter: connect • s: name and save connection • esc: back")
+	content += "\n\n" + helpStyle.Render("F1: test connection • F2: save connection • tab: switch fields • esc: back")
 	return docStyle.Render(content)
 }
 
@@ -785,6 +838,21 @@ func (m model) dataPreviewView() string {
 }
 
 // Command to connect to database
+func (m model) testConnection() tea.Cmd {
+	return func() tea.Msg {
+		db, err := sql.Open(m.selectedDB.driver, m.connectionStr)
+		if err != nil {
+			return testConnectionResult{success: false, err: err}
+		}
+		err = db.Ping()
+		db.Close() // Always close the test connection
+		if err != nil {
+			return testConnectionResult{success: false, err: err}
+		}
+		return testConnectionResult{success: true, err: nil}
+	}
+}
+
 func (m model) connectDB() tea.Cmd {
 	return func() tea.Msg {
 		db, err := sql.Open(m.selectedDB.driver, m.connectionStr)
@@ -940,6 +1008,11 @@ type connectResult struct {
 	err        error
 }
 
+type testConnectionResult struct {
+	success bool
+	err     error
+}
+
 type columnsResult struct {
 	columns [][]string
 	err     error
@@ -994,6 +1067,23 @@ func (m model) handleConnectResult(msg connectResult) (model, tea.Cmd) {
 	m.tablesList.SetItems(items)
 
 	return m, nil
+}
+
+func (m model) handleTestConnectionResult(msg testConnectionResult) (model, tea.Cmd) {
+	if msg.err != nil {
+		m.err = msg.err
+		// Start timeout to clear the error message
+		return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
+			return clearErrorMsg{}
+		})
+	}
+	// Clear any previous error and show success message temporarily
+	m.err = nil
+	m.queryResult = "✅ Connection test successful!"
+	// Start timeout to clear the success message
+	return m, tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
 }
 
 func (m model) handleColumnsResult(msg columnsResult) (model, tea.Cmd) {
