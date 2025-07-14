@@ -88,6 +88,8 @@ None currently. The application builds and runs successfully.
 - `n`: Start new database connection
 - `p`: Preview table data (first 10 rows)
 - `r`: Run custom SQL query
+- `Ctrl+H`: Access query history (from query view)
+- `d`: Delete saved connection (in saved connections view) or query history entry (in query history view)
 - `Ctrl+F` or `/`: Search tables or columns by name
 - `F1`: Test database connection (without saving)
 - `F2`: Validate, save and connect to database

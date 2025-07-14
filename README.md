@@ -38,6 +38,8 @@ Run the application:
 - **p**: Preview table data (first 10 rows)
 - **r**: Run custom SQL query
 - **Ctrl+F** or **/**: Search tables (in tables view) or columns (in columns view)
+- **Ctrl+H**: Access query history (in query view)
+- **d**: Delete saved connection (in saved connections view) or query history entry (in query history view)
 - **F1**: Test database connection (in connection view)
 - **F2**: Validate, save and connect to database (in connection view)
 - **s**: Save database connection (from tables view)
@@ -152,7 +154,7 @@ go vet ./...
 - [x] 6. Connection testing - Validate connections before saving
 - [x] 7. Error handling improvements - Better error messages and recovery
 - [x] 8. Search functionality - Search tables and columns by name
-- [ ] 9. Query history - Save and recall previously executed queries
+- [x] 9. Query history - Save and recall previously executed queries
 
 ### Enhanced Database Support
 - [ ] 10. Database schema support - Handle multiple schemas in PostgreSQL
