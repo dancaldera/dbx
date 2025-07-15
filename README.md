@@ -96,6 +96,21 @@ DBX provides comprehensive schema support for PostgreSQL databases:
 - **MySQL**: Uses database-level organization (no schema selection needed)
 - **SQLite**: Uses default `main` schema
 
+## View Support
+
+DBX provides comprehensive view support across all supported database types:
+
+### Database View Features
+- **View Detection**: Automatically detects and displays database views alongside tables
+- **Visual Distinction**: Views are marked with 👁️ emoji, tables with 📊 emoji
+- **Cross-Database Support**: Works with PostgreSQL, MySQL, and SQLite views
+
+### View Workflow
+1. **View Listing**: Views appear in the table listing with distinct visual indicators
+2. **View Selection**: Select views the same way as tables using arrow keys and Enter
+3. **View Columns**: View column structure the same way as tables
+4. **View Preview**: Preview view data the same way as table data
+
 ## Export Functionality
 
 DBX supports exporting query results and table previews to multiple formats:
@@ -179,7 +194,7 @@ go vet ./...
 
 ### Enhanced Database Support
 - [x] 10. Database schema support - Handle multiple schemas in PostgreSQL
-- [ ] 11. View support - Browse and explore database views
+- [x] 11. View support - Browse and explore database views
 - [ ] 12. Index information - Display table indexes and constraints
 - [ ] 13. Foreign key relationships - Show table relationships
 - [ ] 14. Stored procedures - List and describe stored procedures/functions

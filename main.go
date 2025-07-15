@@ -184,6 +184,7 @@ const (
 	queryView
 	queryHistoryView
 	dataPreviewView
+	rowDetailView
 )
 
 // Saved connection
@@ -293,6 +294,15 @@ type model struct {
 	queryHistory     []QueryHistoryEntry
 	queryHistoryList list.Model
 	isViewingHistory bool
+	// Row detail functionality
+	selectedRowData      []string
+	selectedRowIndex     int
+	rowDetailCurrentPage int
+	rowDetailItemsPerPage int
+	rowDetailSelectedField int
+	isViewingFullText    bool
+	fullTextScrollOffset int
+	fullTextLinesPerPage int
 }
 
 func initialModel() model {
@@ -440,6 +450,8 @@ func initialModel() model {
 		queryHistory:         queryHistory,
 		editingConnectionIdx: -1,
 		spinner:              s,
+		rowDetailItemsPerPage: 8, // Show 8 fields per page
+		fullTextLinesPerPage: 20, // Show 20 lines per page in full text view
 	}
 
 	// Initialize query history list with loaded data
@@ -584,6 +596,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = tablesView
 			case dataPreviewView:
 				m.state = tablesView
+			case rowDetailView:
+				m.state = dataPreviewView
 			case queryHistoryView:
 				m.state = queryView
 			}
@@ -767,6 +781,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+
 		case "d":
 			if m.state == savedConnectionsView && len(m.savedConnections) > 0 {
 				// Delete selected connection
@@ -932,6 +947,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.queryInput.Focus()
 					}
 				}
+
+			case dataPreviewView:
+				// Get selected row data and show row detail view
+				if len(m.dataPreviewTable.Rows()) > 0 {
+					selectedIndex := m.dataPreviewTable.Cursor()
+					if selectedIndex < len(m.dataPreviewTable.Rows()) {
+						m.selectedRowIndex = selectedIndex
+						m.selectedRowData = m.dataPreviewTable.Rows()[selectedIndex]
+						m.rowDetailCurrentPage = 0 // Reset to first page
+						m.rowDetailSelectedField = 0 // Reset field selection
+						m.isViewingFullText = false // Reset full text view
+						m.fullTextScrollOffset = 0 // Reset scroll position
+						m.state = rowDetailView
+					}
+				}
 			}
 		}
 	}
@@ -1080,6 +1110,76 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.queryHistoryList, cmd = m.queryHistoryList.Update(msg)
 	case dataPreviewView:
 		m.dataPreviewTable, cmd = m.dataPreviewTable.Update(msg)
+	case rowDetailView:
+		// Handle pagination and navigation keys for row detail view
+		if msg, ok := msg.(tea.KeyMsg); ok {
+			columns := m.dataPreviewTable.Columns()
+			totalPages := (len(columns) + m.rowDetailItemsPerPage - 1) / m.rowDetailItemsPerPage
+			
+			if m.isViewingFullText {
+				// In full text view, handle scrolling and navigation
+				switch msg.String() {
+				case "esc":
+					m.isViewingFullText = false
+					m.fullTextScrollOffset = 0
+				case "up", "k":
+					if m.fullTextScrollOffset > 0 {
+						m.fullTextScrollOffset--
+					}
+				case "down", "j":
+					m.fullTextScrollOffset++
+				case "pgup":
+					m.fullTextScrollOffset -= m.fullTextLinesPerPage
+					if m.fullTextScrollOffset < 0 {
+						m.fullTextScrollOffset = 0
+					}
+				case "pgdown":
+					m.fullTextScrollOffset += m.fullTextLinesPerPage
+				case "home":
+					m.fullTextScrollOffset = 0
+				case "end":
+					// Set to a large number, will be clamped in the view
+					m.fullTextScrollOffset = 9999
+				}
+			} else {
+				// In normal row detail view
+				switch msg.String() {
+				case "right", "n", "pgdown":
+					if m.rowDetailCurrentPage < totalPages-1 {
+						m.rowDetailCurrentPage++
+						m.rowDetailSelectedField = 0 // Reset field selection
+					}
+				case "left", "p", "pgup":
+					if m.rowDetailCurrentPage > 0 {
+						m.rowDetailCurrentPage--
+						m.rowDetailSelectedField = 0 // Reset field selection
+					}
+				case "home":
+					m.rowDetailCurrentPage = 0
+					m.rowDetailSelectedField = 0
+				case "end":
+					m.rowDetailCurrentPage = totalPages - 1
+					m.rowDetailSelectedField = 0
+				case "up", "k":
+					if m.rowDetailSelectedField > 0 {
+						m.rowDetailSelectedField--
+					}
+				case "down", "j":
+					fieldsOnPage := m.rowDetailItemsPerPage
+					if m.rowDetailCurrentPage == totalPages-1 {
+						// Last page might have fewer items
+						fieldsOnPage = len(columns) - (m.rowDetailCurrentPage * m.rowDetailItemsPerPage)
+					}
+					if m.rowDetailSelectedField < fieldsOnPage-1 {
+						m.rowDetailSelectedField++
+					}
+				case "enter", "space":
+					// View full text of selected field
+					m.isViewingFullText = true
+					m.fullTextScrollOffset = 0
+				}
+			}
+		}
 	default:
 		// Handle spinner messages
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -1113,6 +1213,8 @@ func (m model) View() string {
 		return m.queryHistoryView()
 	case dataPreviewView:
 		return m.dataPreviewView()
+	case rowDetailView:
+		return m.rowDetailView()
 	}
 	return ""
 }
@@ -1338,6 +1440,10 @@ func (m model) tablesView() string {
 			loadingMsg := m.getLoadingText("Loading table data preview...")
 			elements = append(elements, m.tablesList.View())
 			elements = append(elements, loadingMsg)
+		} else if m.queryResult != "" {
+			// Show query result message (like view definitions)
+			elements = append(elements, m.tablesList.View())
+			elements = append(elements, successStyle.Render(m.queryResult))
 		} else if len(m.tables) == 0 {
 			emptyMsg := infoStyle.Render("📋 No tables found in this database.\n\nThe database might be empty or you might not have sufficient permissions.")
 			elements = append(elements, m.tablesList.View())
@@ -1516,7 +1622,7 @@ func (m model) dataPreviewView() string {
 		content += helpStyle.Render("Loading data preview...")
 	}
 
-	content += "\n\n" + helpStyle.Render("↑/↓: navigate rows • "+keyStyle.Render("Ctrl+E")+": export CSV • "+keyStyle.Render("Ctrl+J")+": export JSON • esc: back to tables")
+	content += "\n\n" + helpStyle.Render("↑/↓: navigate rows • "+keyStyle.Render("enter")+": view row details • "+keyStyle.Render("Ctrl+E")+": export CSV • "+keyStyle.Render("Ctrl+J")+": export JSON • esc: back to tables")
 	return docStyle.Render(content)
 }
 
@@ -1537,6 +1643,254 @@ func (m model) queryHistoryView() string {
 	)
 
 	return docStyle.Render(content + "\n" + helpText)
+}
+
+func (m model) rowDetailView() string {
+	if len(m.selectedRowData) == 0 {
+		return docStyle.Render("No row data available")
+	}
+
+	// Get column names from the data preview table
+	columns := m.dataPreviewTable.Columns()
+	
+	// If viewing full text of a field
+	if m.isViewingFullText {
+		return m.fullRowDataView()
+	}
+	
+	// Calculate pagination
+	totalFields := len(columns)
+	totalPages := (totalFields + m.rowDetailItemsPerPage - 1) / m.rowDetailItemsPerPage
+	startIndex := m.rowDetailCurrentPage * m.rowDetailItemsPerPage
+	endIndex := startIndex + m.rowDetailItemsPerPage
+	if endIndex > totalFields {
+		endIndex = totalFields
+	}
+	
+	// Build title with pagination info
+	pageInfo := ""
+	if totalPages > 1 {
+		pageInfo = fmt.Sprintf(" (Page %d of %d)", m.rowDetailCurrentPage+1, totalPages)
+	}
+	title := titleStyle.Render(fmt.Sprintf("Row Details - %s (Row %d)%s", m.selectedTable, m.selectedRowIndex+1, pageInfo))
+	
+	// Build the row detail content for current page
+	var details []string
+	for i := startIndex; i < endIndex; i++ {
+		if i < len(columns) && i < len(m.selectedRowData) {
+			col := columns[i]
+			value := m.selectedRowData[i]
+			
+			// Check if this field is selected
+			isSelected := (i - startIndex) == m.rowDetailSelectedField
+			
+			// Handle empty values
+			displayValue := value
+			if value == "" {
+				displayValue = lipgloss.NewStyle().Foreground(lightGray).Render("(empty)")
+			} else if strings.TrimSpace(value) == "" {
+				displayValue = lipgloss.NewStyle().Foreground(lightGray).Render("(whitespace)")
+			}
+			
+			// Handle very long values by truncating and showing they're truncated
+			maxValueLength := 150 // Increased from 90
+			truncated := false
+			if len(value) > maxValueLength {
+				displayValue = value[:maxValueLength] + "..."
+				truncated = true
+			}
+			
+			// Handle multi-line values
+			if strings.Contains(displayValue, "\n") {
+				lines := strings.Split(displayValue, "\n")
+				if len(lines) > 3 { // Increased from 2 to 3
+					// Show first 3 lines and indicate more
+					displayValue = strings.Join(lines[:3], "\n") + "\n" + 
+						lipgloss.NewStyle().Foreground(lightGray).Render("... (truncated)")
+					truncated = true
+				}
+			}
+			
+			// Format field name and value with better styling
+			fieldNameStyle := lipgloss.NewStyle().Foreground(accentMagenta).Bold(true)
+			if isSelected {
+				fieldNameStyle = fieldNameStyle.Background(primaryMagenta).Foreground(white)
+			}
+			fieldName := fieldNameStyle.Render(fmt.Sprintf("%-20s", col.Title))
+			
+			fieldValueStyle := lipgloss.NewStyle().Foreground(white)
+			if isSelected {
+				fieldValueStyle = fieldValueStyle.Background(lightMagenta).Foreground(darkGray)
+			}
+			fieldValue := fieldValueStyle.Render(displayValue)
+			
+			// Add truncation indicator
+			truncationIndicator := ""
+			if truncated {
+				truncationIndicator = " " + lipgloss.NewStyle().Foreground(warningOrange).Render("(truncated)")
+			}
+			
+			fieldContent := fmt.Sprintf("%s │ %s%s", fieldName, fieldValue, truncationIndicator)
+			details = append(details, fieldContent)
+		}
+	}
+	
+	// Add separator between fields
+	detailContent := strings.Join(details, "\n"+strings.Repeat("─", 100)+"\n")
+	
+	// Create card style for better presentation
+	cardStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(primaryMagenta).
+		Padding(1, 2).
+		Margin(1, 0)
+	
+	// Wrap content in card
+	contentCard := cardStyle.Render(detailContent)
+	
+	// Build navigation help text
+	var navHelp []string
+	navHelp = append(navHelp, 
+		keyStyle.Render("↑/↓") + " or " + keyStyle.Render("j/k") + ": select field",
+		keyStyle.Render("enter/space") + ": view full text",
+	)
+	if totalPages > 1 {
+		navHelp = append(navHelp, 
+			keyStyle.Render("←/→") + " or " + keyStyle.Render("p/n") + ": navigate pages",
+			keyStyle.Render("home/end") + ": first/last page",
+		)
+	}
+	navHelp = append(navHelp, keyStyle.Render("esc") + ": back to data preview")
+	
+	helpText := helpStyle.Render(strings.Join(navHelp, " • "))
+	
+	// Field summary
+	fieldSummary := infoStyle.Render(fmt.Sprintf("Showing fields %d-%d of %d", startIndex+1, endIndex, totalFields))
+	
+	// Combine all elements
+	content := title + "\n\n" + fieldSummary + "\n\n" + contentCard
+	
+	return docStyle.Render(content + "\n\n" + helpText)
+}
+
+// Helper function to wrap text to specified width
+func (m model) wrapText(text string, width int) string {
+	if len(text) <= width {
+		return text
+	}
+	
+	var result strings.Builder
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return text
+	}
+	
+	currentLine := words[0]
+	for i := 1; i < len(words); i++ {
+		if len(currentLine)+len(words[i])+1 <= width {
+			currentLine += " " + words[i]
+		} else {
+			result.WriteString(currentLine + "\n")
+			currentLine = words[i]
+		}
+	}
+	result.WriteString(currentLine)
+	return result.String()
+}
+
+// Helper function to get minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// Helper function to get maximum of two integers
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// Function to display complete row data by querying database directly
+func (m model) fullRowDataView() string {
+	title := fmt.Sprintf("Complete Row Data - %s (Row %d)", m.selectedTable, m.selectedRowIndex+1)
+	
+	// Build query to get the complete row data
+	var query string
+	switch m.selectedDB.driver {
+	case "postgres":
+		if m.selectedSchema != "" {
+			query = fmt.Sprintf(`SELECT * FROM "%s"."%s" LIMIT %d OFFSET %d`, 
+				m.selectedSchema, m.selectedTable, 1, m.selectedRowIndex)
+		} else {
+			query = fmt.Sprintf(`SELECT * FROM "%s" LIMIT %d OFFSET %d`, 
+				m.selectedTable, 1, m.selectedRowIndex)
+		}
+	case "mysql":
+		query = fmt.Sprintf("SELECT * FROM `%s` LIMIT %d OFFSET %d", 
+			m.selectedTable, 1, m.selectedRowIndex)
+	case "sqlite3":
+		query = fmt.Sprintf(`SELECT * FROM "%s" LIMIT %d OFFSET %d`, 
+			m.selectedTable, 1, m.selectedRowIndex)
+	default:
+		query = fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", 
+			m.selectedTable, 1, m.selectedRowIndex)
+	}
+	
+	// Execute query to get complete row data
+	rows, err := m.db.Query(query)
+	if err != nil {
+		return fmt.Sprintf("%s\n\nError: %v\n\nesc: back to row details", title, err)
+	}
+	defer rows.Close()
+	
+	// Get column names
+	columnNames, err := rows.Columns()
+	if err != nil {
+		return fmt.Sprintf("%s\n\nError getting columns: %v\n\nesc: back to row details", title, err)
+	}
+	
+	// Get the row data
+	if !rows.Next() {
+		return fmt.Sprintf("%s\n\nNo data found\n\nesc: back to row details", title)
+	}
+	
+	// Create slice to hold values
+	values := make([]interface{}, len(columnNames))
+	valuePtrs := make([]interface{}, len(columnNames))
+	for i := range values {
+		valuePtrs[i] = &values[i]
+	}
+	
+	err = rows.Scan(valuePtrs...)
+	if err != nil {
+		return fmt.Sprintf("%s\n\nError reading row: %v\n\nesc: back to row details", title, err)
+	}
+	
+	// Build the display content
+	content := fmt.Sprintf("%s\n\n", title)
+	
+	for i, columnName := range columnNames {
+		var valueStr string
+		if values[i] == nil {
+			valueStr = "NULL"
+		} else {
+			valueStr = fmt.Sprintf("%v", values[i])
+		}
+		
+		if valueStr == "" {
+			valueStr = "(empty)"
+		}
+		
+		content += fmt.Sprintf("%s: %s\n", columnName, valueStr)
+	}
+	
+	content += "\nesc: back to row details"
+	
+	return content
 }
 
 // Command to connect to database
@@ -1635,7 +1989,7 @@ func (m model) connectDB() tea.Cmd {
 // Command to load columns
 func (m model) loadColumns() tea.Cmd {
 	return func() tea.Msg {
-		columns, err := getColumns(m.db, m.selectedDB.driver, m.selectedTable)
+		columns, err := getColumns(m.db, m.selectedDB.driver, m.selectedTable, m.selectedSchema)
 		if err != nil {
 			return columnsResult{err: err}
 		}
@@ -1661,6 +2015,7 @@ func (m model) loadTablesForSchema() tea.Cmd {
 	}
 }
 
+
 // Command to load data preview
 func (m model) loadDataPreview() tea.Cmd {
 	return func() tea.Msg {
@@ -1668,7 +2023,12 @@ func (m model) loadDataPreview() tea.Cmd {
 		var query string
 		switch m.selectedDB.driver {
 		case "postgres":
-			query = fmt.Sprintf(`SELECT * FROM "%s" LIMIT 10`, m.selectedTable)
+			// Include schema for PostgreSQL
+			if m.selectedSchema != "" {
+				query = fmt.Sprintf(`SELECT * FROM "%s"."%s" LIMIT 10`, m.selectedSchema, m.selectedTable)
+			} else {
+				query = fmt.Sprintf(`SELECT * FROM "%s" LIMIT 10`, m.selectedTable)
+			}
 		case "mysql":
 			query = fmt.Sprintf("SELECT * FROM `%s` LIMIT 10", m.selectedTable)
 		case "sqlite3":
@@ -1825,6 +2185,7 @@ type exportResult struct {
 	rowCount int
 	err      error
 }
+
 
 type testAndSaveResult struct {
 	name       string
@@ -2237,6 +2598,7 @@ func (m model) handleExportResult(msg exportResult) (model, tea.Cmd) {
 	})
 }
 
+
 func (m model) handleTestAndSaveResult(msg testAndSaveResult) (model, tea.Cmd) {
 	m.isSavingConnection = false
 	if !msg.success {
@@ -2349,14 +2711,18 @@ func getTableInfos(db *sql.DB, driver, schema string) ([]tableInfo, error) {
 	case "postgres":
 		query := `
 			SELECT 
-				t.tablename as table_name,
-				t.schemaname as schema_name,
-				'BASE TABLE' as table_type,
-				COALESCE(s.n_tup_ins + s.n_tup_upd - s.n_tup_del, 0) as estimated_rows
-			FROM pg_tables t
-			LEFT JOIN pg_stat_user_tables s ON t.tablename = s.relname AND t.schemaname = s.schemaname
-			WHERE t.schemaname = $1
-			ORDER BY t.tablename`
+				table_name,
+				table_schema as schema_name,
+				table_type,
+				CASE 
+					WHEN table_type = 'BASE TABLE' THEN COALESCE(s.n_tup_ins + s.n_tup_upd - s.n_tup_del, 0)
+					ELSE 0
+				END as estimated_rows
+			FROM information_schema.tables t
+			LEFT JOIN pg_stat_user_tables s ON t.table_name = s.relname AND t.table_schema = s.schemaname
+			WHERE t.table_schema = $1 
+				AND t.table_type IN ('BASE TABLE', 'VIEW')
+			ORDER BY t.table_type, t.table_name`
 
 		rows, err := db.Query(query, schema)
 		if err != nil {
@@ -2373,21 +2739,32 @@ func getTableInfos(db *sql.DB, driver, schema string) ([]tableInfo, error) {
 				continue
 			}
 
-			if estimatedRows.Valid {
+			// Determine the object type display name
+			var objectType string
+			var emoji string
+			if info.tableType == "VIEW" {
+				objectType = "view"
+				emoji = "👁️"
+			} else {
+				objectType = "table"
+				emoji = "📊"
+			}
+
+			if info.tableType == "BASE TABLE" && estimatedRows.Valid && estimatedRows.Int64 > 0 {
 				info.rowCount = estimatedRows.Int64
 				if info.rowCount < 0 {
 					info.rowCount = 0
 				}
 				if info.schema != "" && info.schema != "public" {
-					info.description = fmt.Sprintf("%s.%s • ~%d rows", info.schema, "table", info.rowCount)
+					info.description = fmt.Sprintf("%s %s.%s • ~%d rows", emoji, info.schema, objectType, info.rowCount)
 				} else {
-					info.description = fmt.Sprintf("Table • ~%d rows", info.rowCount)
+					info.description = fmt.Sprintf("%s %s • ~%d rows", emoji, strings.Title(objectType), info.rowCount)
 				}
 			} else {
 				if info.schema != "" && info.schema != "public" {
-					info.description = fmt.Sprintf("%s.%s", info.schema, "table")
+					info.description = fmt.Sprintf("%s %s.%s", emoji, info.schema, objectType)
 				} else {
-					info.description = "Table"
+					info.description = fmt.Sprintf("%s %s", emoji, strings.Title(objectType))
 				}
 			}
 
@@ -2403,7 +2780,8 @@ func getTableInfos(db *sql.DB, driver, schema string) ([]tableInfo, error) {
 				COALESCE(TABLE_ROWS, 0) as table_rows
 			FROM INFORMATION_SCHEMA.TABLES 
 			WHERE TABLE_SCHEMA = DATABASE()
-			ORDER BY TABLE_NAME`
+				AND TABLE_TYPE IN ('BASE TABLE', 'VIEW')
+			ORDER BY TABLE_TYPE, TABLE_NAME`
 
 		rows, err := db.Query(query)
 		if err != nil {
@@ -2419,39 +2797,80 @@ func getTableInfos(db *sql.DB, driver, schema string) ([]tableInfo, error) {
 				continue
 			}
 
-			if tableRows.Valid && tableRows.Int64 > 0 {
-				info.rowCount = tableRows.Int64
-				info.description = fmt.Sprintf("Table • ~%d rows", info.rowCount)
+			// Determine the object type display name
+			var objectType string
+			var emoji string
+			if info.tableType == "VIEW" {
+				objectType = "view"
+				emoji = "👁️"
 			} else {
-				info.description = "Table"
+				objectType = "table"
+				emoji = "📊"
+			}
+
+			if info.tableType == "BASE TABLE" && tableRows.Valid && tableRows.Int64 > 0 {
+				info.rowCount = tableRows.Int64
+				info.description = fmt.Sprintf("%s %s • ~%d rows", emoji, strings.Title(objectType), info.rowCount)
+			} else {
+				info.description = fmt.Sprintf("%s %s", emoji, strings.Title(objectType))
 			}
 
 			tableInfos = append(tableInfos, info)
 		}
 
 	case "sqlite3":
-		// SQLite doesn't have built-in row count stats, so we'll get table names and count separately
-		tables, err := getTables(db, driver)
-		if err != nil {
-			return nil, err
-		}
+		// SQLite: Get both tables and views from sqlite_master
+		query := `
+			SELECT name, type 
+			FROM sqlite_master 
+			WHERE type IN ('table', 'view') 
+				AND name NOT LIKE 'sqlite_%'
+			ORDER BY type, name`
 
-		for _, tableName := range tables {
-			info := tableInfo{
-				name:      tableName,
-				schema:    "main", // SQLite uses "main" as the default schema
-				tableType: "table",
+		rows, err := db.Query(query)
+		if err != nil {
+			return getSimpleTableInfos(db, driver, schema)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var name, objType string
+			err := rows.Scan(&name, &objType)
+			if err != nil {
+				continue
 			}
 
-			// Try to get row count (this might be slow for large tables)
-			countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM "%s"`, tableName)
-			var count int64
-			err := db.QueryRow(countQuery).Scan(&count)
-			if err == nil {
-				info.rowCount = count
-				info.description = fmt.Sprintf("Table • %d rows", count)
+			info := tableInfo{
+				name:   name,
+				schema: "main", // SQLite uses "main" as the default schema
+			}
+
+			// Determine the object type display name
+			var objectType string
+			var emoji string
+			if objType == "view" {
+				info.tableType = "VIEW"
+				objectType = "view"
+				emoji = "👁️"
 			} else {
-				info.description = "Table"
+				info.tableType = "BASE TABLE"
+				objectType = "table"
+				emoji = "📊"
+			}
+
+			// Try to get row count for tables only (views don't have meaningful row counts)
+			if objType == "table" {
+				countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM "%s"`, name)
+				var count int64
+				err := db.QueryRow(countQuery).Scan(&count)
+				if err == nil {
+					info.rowCount = count
+					info.description = fmt.Sprintf("%s %s • %d rows", emoji, strings.Title(objectType), count)
+				} else {
+					info.description = fmt.Sprintf("%s %s", emoji, strings.Title(objectType))
+				}
+			} else {
+				info.description = fmt.Sprintf("%s %s", emoji, strings.Title(objectType))
 			}
 
 			tableInfos = append(tableInfos, info)
@@ -2487,21 +2906,21 @@ func getSimpleTableInfos(db *sql.DB, driver, schema string) ([]tableInfo, error)
 		tableInfos = append(tableInfos, tableInfo{
 			name:        tableName,
 			schema:      schemaName,
-			tableType:   "table",
-			description: "Table",
+			tableType:   "BASE TABLE",
+			description: "📊 Table",
 		})
 	}
 
 	return tableInfos, nil
 }
 
-func getColumns(db *sql.DB, driver, tableName string) ([][]string, error) {
+func getColumns(db *sql.DB, driver, tableName, schema string) ([][]string, error) {
 	var query string
 	switch driver {
 	case "postgres":
 		query = `SELECT column_name, data_type, is_nullable, column_default 
 				 FROM information_schema.columns 
-				 WHERE table_name = $1 
+				 WHERE table_name = $1 AND table_schema = $2
 				 ORDER BY ordinal_position`
 	case "mysql":
 		query = `SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT 
@@ -2512,7 +2931,20 @@ func getColumns(db *sql.DB, driver, tableName string) ([][]string, error) {
 		query = fmt.Sprintf("PRAGMA table_info(%s)", tableName)
 	}
 
-	rows, err := db.Query(query, tableName)
+	var rows *sql.Rows
+	var err error
+	
+	switch driver {
+	case "postgres":
+		rows, err = db.Query(query, tableName, schema)
+	case "mysql":
+		rows, err = db.Query(query, tableName)
+	case "sqlite3":
+		rows, err = db.Query(query)
+	default:
+		rows, err = db.Query(query, tableName)
+	}
+	
 	if err != nil {
 		return nil, err
 	}

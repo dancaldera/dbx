@@ -51,6 +51,13 @@ For PostgreSQL databases with multiple schemas:
 - **Schema Context**: All table operations work within the selected schema
 - **Default Behavior**: Single schema databases (or MySQL/SQLite) skip schema selection
 
+### View Support
+
+The application supports database views across all database types:
+- **View Detection**: Automatically detects and lists database views alongside tables
+- **Visual Indicators**: Views display with 👁️ emoji, tables with 📊 emoji
+- **Cross-Database**: PostgreSQL, MySQL, and SQLite view support with database-specific queries
+
 ## Development Commands
 
 ### Build and Run
