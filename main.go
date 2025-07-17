@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -185,6 +186,7 @@ const (
 	queryHistoryView
 	dataPreviewView
 	rowDetailView
+	fieldDetailView
 )
 
 // Saved connection
@@ -307,6 +309,14 @@ type model struct {
 	fullTextCurrentPage   int
 	fullTextItemsPerPage  int
 	fullTextSelectedField int
+	// Individual field detail view
+	selectedFieldName           string
+	selectedFieldValue          string
+	selectedFieldIndex          int
+	fieldDetailScrollOffset     int
+	fieldDetailHorizontalOffset int
+	fieldDetailLinesPerPage     int
+	fieldDetailCharsPerLine     int
 }
 
 func initialModel() model {
@@ -436,27 +446,29 @@ func initialModel() model {
 	schemasList.SetShowHelp(false)
 
 	m := model{
-		state:                 dbTypeView,
-		dbTypeList:            dbList,
-		savedConnectionsList:  savedConnectionsList,
-		textInput:             ti,
-		nameInput:             ni,
-		queryInput:            qi,
-		searchInput:           si,
-		tablesList:            tablesList,
-		columnsTable:          t,
-		queryResultsTable:     queryResultsTable,
-		dataPreviewTable:      dataPreviewTable,
-		queryHistoryList:      queryHistoryList,
-		schemasList:           schemasList,
-		selectedSchema:        "public", // Default to public schema for PostgreSQL
-		savedConnections:      savedConnections,
-		queryHistory:          queryHistory,
-		editingConnectionIdx:  -1,
-		spinner:               s,
-		rowDetailItemsPerPage: 8,  // Show 8 fields per page
-		fullTextLinesPerPage:  20, // Show 20 lines per page in full text view
-		fullTextItemsPerPage:  5,  // Show 5 fields per page in full text view
+		state:                   dbTypeView,
+		dbTypeList:              dbList,
+		savedConnectionsList:    savedConnectionsList,
+		textInput:               ti,
+		nameInput:               ni,
+		queryInput:              qi,
+		searchInput:             si,
+		tablesList:              tablesList,
+		columnsTable:            t,
+		queryResultsTable:       queryResultsTable,
+		dataPreviewTable:        dataPreviewTable,
+		queryHistoryList:        queryHistoryList,
+		schemasList:             schemasList,
+		selectedSchema:          "public", // Default to public schema for PostgreSQL
+		savedConnections:        savedConnections,
+		queryHistory:            queryHistory,
+		editingConnectionIdx:    -1,
+		spinner:                 s,
+		rowDetailItemsPerPage:   8,   // Show 8 fields per page
+		fullTextLinesPerPage:    20,  // Show 20 lines per page in full text view
+		fullTextItemsPerPage:    5,   // Show 5 fields per page in full text view
+		fieldDetailLinesPerPage: 25,  // Show 25 lines per page in field detail view
+		fieldDetailCharsPerLine: 120, // Show 120 characters per line in field detail view
 	}
 
 	// Initialize query history list with loaded data
@@ -488,6 +500,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleExportResult(msg)
 	case testAndSaveResult:
 		return m.handleTestAndSaveResult(msg)
+	case fieldValueResult:
+		return m.handleFieldValueResult(msg)
+	case clipboardResult:
+		return m.handleClipboardResult(msg)
 	case clearResultMsg:
 		m.queryResult = ""
 		return m, nil
@@ -603,6 +619,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = tablesView
 			case rowDetailView:
 				m.state = dataPreviewView
+			case fieldDetailView:
+				m.state = rowDetailView
 			case queryHistoryView:
 				m.state = queryView
 			}
@@ -966,6 +984,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.fullTextCurrentPage = 0    // Reset full text page
 						m.fullTextSelectedField = 0  // Reset full text field selection
 						m.state = rowDetailView
+						return m, nil // Important: return to prevent further processing of the same key event
 					}
 				}
 			}
@@ -1202,11 +1221,109 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.rowDetailSelectedField++
 					}
 				case "enter", "space":
-					// View full text of selected field
-					m.isViewingFullText = true
-					m.fullTextScrollOffset = 0
-					m.fullTextCurrentPage = 0
-					m.fullTextSelectedField = 0
+					// Navigate to field detail view - get complete field value from database
+					columns := m.dataPreviewTable.Columns()
+					actualFieldIndex := m.rowDetailCurrentPage*m.rowDetailItemsPerPage + m.rowDetailSelectedField
+					if actualFieldIndex < len(columns) {
+						m.selectedFieldName = columns[actualFieldIndex].Title
+						m.selectedFieldIndex = actualFieldIndex
+						m.fieldDetailScrollOffset = 0
+						m.fieldDetailHorizontalOffset = 0
+						m.state = fieldDetailView
+						// Fetch complete field value from database
+						return m, m.loadCompleteFieldValue(columns[actualFieldIndex].Title)
+					}
+				}
+			}
+		}
+	case fieldDetailView:
+		// Handle navigation in field detail view
+		if msg, ok := msg.(tea.KeyMsg); ok {
+			lines := strings.Split(m.selectedFieldValue, "\n")
+			totalLines := len(lines)
+
+			switch msg.String() {
+			case "left", "h":
+				// Scroll horizontally left
+				if m.fieldDetailHorizontalOffset > 0 {
+					m.fieldDetailHorizontalOffset -= 10 // Scroll by 10 characters
+					if m.fieldDetailHorizontalOffset < 0 {
+						m.fieldDetailHorizontalOffset = 0
+					}
+				}
+			case "right", "l":
+				// Scroll horizontally right
+				m.fieldDetailHorizontalOffset += 10 // Scroll by 10 characters
+			case "shift+left":
+				// Fast scroll left
+				if m.fieldDetailHorizontalOffset > 0 {
+					m.fieldDetailHorizontalOffset -= 50 // Scroll by 50 characters
+					if m.fieldDetailHorizontalOffset < 0 {
+						m.fieldDetailHorizontalOffset = 0
+					}
+				}
+			case "shift+right":
+				// Fast scroll right
+				m.fieldDetailHorizontalOffset += 50 // Scroll by 50 characters
+			case "ctrl+home":
+				// Jump to beginning of line horizontally
+				m.fieldDetailHorizontalOffset = 0
+			case "ctrl+end":
+				// Jump to end of line horizontally (show last part)
+				lines := strings.Split(m.selectedFieldValue, "\n")
+				maxLineLength := 0
+				for _, line := range lines {
+					if len(line) > maxLineLength {
+						maxLineLength = len(line)
+					}
+				}
+				if maxLineLength > m.fieldDetailCharsPerLine {
+					m.fieldDetailHorizontalOffset = maxLineLength - m.fieldDetailCharsPerLine
+				} else {
+					m.fieldDetailHorizontalOffset = 0
+				}
+			case "c":
+				// Copy complete field value to clipboard
+				return m, m.copyToClipboard(m.selectedFieldValue)
+			}
+
+			// Handle vertical scrolling for multi-line content
+			if totalLines > 1 {
+				switch msg.String() {
+				case "up", "k":
+					if m.fieldDetailScrollOffset > 0 {
+						m.fieldDetailScrollOffset--
+					}
+				case "down", "j":
+					maxOffset := totalLines - m.fieldDetailLinesPerPage
+					if maxOffset < 0 {
+						maxOffset = 0
+					}
+					if m.fieldDetailScrollOffset < maxOffset {
+						m.fieldDetailScrollOffset++
+					}
+				case "pgup":
+					m.fieldDetailScrollOffset -= m.fieldDetailLinesPerPage
+					if m.fieldDetailScrollOffset < 0 {
+						m.fieldDetailScrollOffset = 0
+					}
+				case "pgdown":
+					maxOffset := totalLines - m.fieldDetailLinesPerPage
+					if maxOffset < 0 {
+						maxOffset = 0
+					}
+					m.fieldDetailScrollOffset += m.fieldDetailLinesPerPage
+					if m.fieldDetailScrollOffset > maxOffset {
+						m.fieldDetailScrollOffset = maxOffset
+					}
+				case "home":
+					m.fieldDetailScrollOffset = 0
+				case "end":
+					maxOffset := totalLines - m.fieldDetailLinesPerPage
+					if maxOffset < 0 {
+						maxOffset = 0
+					}
+					m.fieldDetailScrollOffset = maxOffset
 				}
 			}
 		}
@@ -1245,6 +1362,8 @@ func (m model) View() string {
 		return m.dataPreviewView()
 	case rowDetailView:
 		return m.rowDetailView()
+	case fieldDetailView:
+		return m.fieldDetailView()
 	}
 	return ""
 }
@@ -1722,21 +1841,37 @@ func (m model) rowDetailView() string {
 				displayValue = lipgloss.NewStyle().Foreground(lightGray).Render("(whitespace)")
 			}
 
-			// Handle very long values by truncating and showing they're truncated
-			maxValueLength := 150 // Increased from 90
+			// Smart truncation for better UX
+			maxValueLength := 80 // Reduced for better pagination view
 			truncated := false
-			if len(value) > maxValueLength {
-				displayValue = value[:maxValueLength] + "..."
-				truncated = true
-			}
+			originalLength := len(value)
 
-			// Handle multi-line values
-			if strings.Contains(displayValue, "\n") {
+			// Check if value is large (show preview only)
+			if originalLength > maxValueLength {
+				// For single line content, show preview
+				if !strings.Contains(value, "\n") {
+					displayValue = value[:maxValueLength] + "..."
+					truncated = true
+				} else {
+					// For multi-line content, show first line + indicator
+					lines := strings.Split(value, "\n")
+					if len(lines[0]) > maxValueLength {
+						displayValue = lines[0][:maxValueLength] + "..."
+					} else {
+						displayValue = lines[0]
+					}
+					if len(lines) > 1 {
+						displayValue += "\n" + lipgloss.NewStyle().Foreground(lightGray).Render(fmt.Sprintf("... (+%d more lines)", len(lines)-1))
+					}
+					truncated = true
+				}
+			} else if strings.Contains(displayValue, "\n") {
+				// Handle smaller multi-line values
 				lines := strings.Split(displayValue, "\n")
-				if len(lines) > 3 { // Increased from 2 to 3
-					// Show first 3 lines and indicate more
-					displayValue = strings.Join(lines[:3], "\n") + "\n" +
-						lipgloss.NewStyle().Foreground(lightGray).Render("... (truncated)")
+				if len(lines) > 2 {
+					// Show first 2 lines and indicate more
+					displayValue = strings.Join(lines[:2], "\n") + "\n" +
+						lipgloss.NewStyle().Foreground(lightGray).Render(fmt.Sprintf("... (+%d more lines)", len(lines)-2))
 					truncated = true
 				}
 			}
@@ -1754,13 +1889,24 @@ func (m model) rowDetailView() string {
 			}
 			fieldValue := fieldValueStyle.Render(displayValue)
 
-			// Add truncation indicator
-			truncationIndicator := ""
-			if truncated {
-				truncationIndicator = " " + lipgloss.NewStyle().Foreground(warningOrange).Render("(truncated)")
+			// Add size and truncation indicators
+			sizeIndicator := ""
+			if originalLength > 0 {
+				if originalLength > 1024*1024 { // 1MB
+					sizeIndicator = fmt.Sprintf(" %s", lipgloss.NewStyle().Foreground(warningOrange).Render(fmt.Sprintf("[%.1fMB]", float64(originalLength)/(1024*1024))))
+				} else if originalLength > 1024 { // 1KB
+					sizeIndicator = fmt.Sprintf(" %s", lipgloss.NewStyle().Foreground(accentMagenta).Render(fmt.Sprintf("[%.1fKB]", float64(originalLength)/1024)))
+				} else if originalLength > maxValueLength {
+					sizeIndicator = fmt.Sprintf(" %s", lipgloss.NewStyle().Foreground(lightGray).Render(fmt.Sprintf("[%d chars]", originalLength)))
+				}
 			}
 
-			fieldContent := fmt.Sprintf("%s │ %s%s", fieldName, fieldValue, truncationIndicator)
+			enterHint := ""
+			if truncated || originalLength > 50 {
+				enterHint = " " + lipgloss.NewStyle().Foreground(lightGray).Render("(press enter to view full)")
+			}
+
+			fieldContent := fmt.Sprintf("%s │ %s%s%s", fieldName, fieldValue, sizeIndicator, enterHint)
 			details = append(details, fieldContent)
 		}
 	}
@@ -1782,7 +1928,7 @@ func (m model) rowDetailView() string {
 	var navHelp []string
 	navHelp = append(navHelp,
 		keyStyle.Render("↑/↓")+" or "+keyStyle.Render("j/k")+": select field",
-		keyStyle.Render("enter/space")+": view full text",
+		keyStyle.Render("enter/space")+": view field details",
 	)
 	if totalPages > 1 {
 		navHelp = append(navHelp,
@@ -2025,6 +2171,209 @@ func (m model) fullRowDataView() string {
 	content := title + "\n\n" + fieldSummary + "\n" + selectedFieldInfo + "\n\n" + contentCard
 
 	return docStyle.Render(content + "\n\n" + helpText)
+}
+
+// fieldDetailView displays a single field's complete content with scrolling
+func (m model) fieldDetailView() string {
+	if m.selectedFieldName == "" || m.selectedFieldValue == "" {
+		return "No field data available\n\nesc: back to row details"
+	}
+
+	// Simple title
+	title := fmt.Sprintf("Field: %s", m.selectedFieldName)
+
+	// Content statistics and position
+	valueLength := len(m.selectedFieldValue)
+	lines := strings.Split(m.selectedFieldValue, "\n")
+	lineCount := len(lines)
+
+	// Get max line length for horizontal scrolling
+	maxLineLength := 0
+	for _, line := range lines {
+		if len(line) > maxLineLength {
+			maxLineLength = len(line)
+		}
+	}
+
+	// Handle content display with scrolling
+	var visibleContent string
+
+	if lineCount == 1 {
+		// Single line - apply horizontal scrolling
+		content := m.selectedFieldValue
+		if len(content) > m.fieldDetailCharsPerLine {
+			startChar := m.fieldDetailHorizontalOffset
+			endChar := startChar + m.fieldDetailCharsPerLine
+			if startChar >= len(content) {
+				startChar = 0
+				m.fieldDetailHorizontalOffset = 0
+			}
+			if endChar > len(content) {
+				endChar = len(content)
+			}
+			visibleContent = content[startChar:endChar]
+		} else {
+			visibleContent = content
+		}
+	} else {
+		// Multi-line - handle both vertical and horizontal scrolling
+		visibleLines := m.fieldDetailLinesPerPage
+		startLine := m.fieldDetailScrollOffset
+		endLine := startLine + visibleLines
+
+		if endLine > lineCount {
+			endLine = lineCount
+		}
+		if startLine >= lineCount {
+			startLine = 0
+		}
+
+		// Get visible lines and apply horizontal scrolling
+		visibleLineSlice := lines[startLine:endLine]
+		var processedLines []string
+		for _, line := range visibleLineSlice {
+			if len(line) > m.fieldDetailCharsPerLine && m.fieldDetailHorizontalOffset < len(line) {
+				startChar := m.fieldDetailHorizontalOffset
+				endChar := startChar + m.fieldDetailCharsPerLine
+				if endChar > len(line) {
+					endChar = len(line)
+				}
+				processedLines = append(processedLines, line[startChar:endChar])
+			} else if m.fieldDetailHorizontalOffset < len(line) {
+				processedLines = append(processedLines, line[m.fieldDetailHorizontalOffset:])
+			} else {
+				processedLines = append(processedLines, "")
+			}
+		}
+		visibleContent = strings.Join(processedLines, "\n")
+	}
+
+	// Build status line
+	var statusParts []string
+
+	// Size
+	if valueLength > 1024*1024 {
+		statusParts = append(statusParts, fmt.Sprintf("%.1fMB", float64(valueLength)/(1024*1024)))
+	} else if valueLength > 1024 {
+		statusParts = append(statusParts, fmt.Sprintf("%.1fKB", float64(valueLength)/1024))
+	} else {
+		statusParts = append(statusParts, fmt.Sprintf("%d chars", valueLength))
+	}
+
+	// Lines
+	if lineCount > 1 {
+		statusParts = append(statusParts, fmt.Sprintf("%d lines", lineCount))
+	}
+
+	// Position indicators
+	if lineCount > m.fieldDetailLinesPerPage {
+		startLine := m.fieldDetailScrollOffset
+		endLine := startLine + m.fieldDetailLinesPerPage
+		if endLine > lineCount {
+			endLine = lineCount
+		}
+		statusParts = append(statusParts, fmt.Sprintf("lines %d-%d", startLine+1, endLine))
+	}
+
+	if maxLineLength > m.fieldDetailCharsPerLine {
+		statusParts = append(statusParts, fmt.Sprintf("chars %d-%d of %d",
+			m.fieldDetailHorizontalOffset+1,
+			min(m.fieldDetailHorizontalOffset+m.fieldDetailCharsPerLine, maxLineLength),
+			maxLineLength))
+	}
+
+	statusLine := strings.Join(statusParts, " • ")
+
+	// Simple help
+	var helpParts []string
+	if maxLineLength > m.fieldDetailCharsPerLine {
+		helpParts = append(helpParts, "←/→: scroll horizontal")
+	}
+	if lineCount > m.fieldDetailLinesPerPage {
+		helpParts = append(helpParts, "↑/↓: scroll vertical")
+	}
+	helpParts = append(helpParts, "c: copy to clipboard", "esc: back")
+
+	helpText := strings.Join(helpParts, " • ")
+
+	// Simple layout without excessive borders
+	result := title + "\n"
+	result += statusLine + "\n"
+	result += strings.Repeat("-", 60) + "\n"
+	result += visibleContent + "\n"
+	result += strings.Repeat("-", 60) + "\n"
+	result += helpText
+
+	return result
+}
+
+// Command to load complete field value from database
+func (m model) loadCompleteFieldValue(fieldName string) tea.Cmd {
+	return func() tea.Msg {
+		// Build query to get the specific field from the selected row
+		var query string
+		switch m.selectedDB.driver {
+		case "postgres":
+			if m.selectedSchema != "" {
+				query = fmt.Sprintf(`SELECT "%s" FROM "%s"."%s" LIMIT 1 OFFSET %d`,
+					fieldName, m.selectedSchema, m.selectedTable, m.selectedRowIndex)
+			} else {
+				query = fmt.Sprintf(`SELECT "%s" FROM "%s" LIMIT 1 OFFSET %d`,
+					fieldName, m.selectedTable, m.selectedRowIndex)
+			}
+		case "mysql":
+			query = fmt.Sprintf("SELECT `%s` FROM `%s` LIMIT 1 OFFSET %d",
+				fieldName, m.selectedTable, m.selectedRowIndex)
+		case "sqlite3":
+			query = fmt.Sprintf(`SELECT "%s" FROM "%s" LIMIT 1 OFFSET %d`,
+				fieldName, m.selectedTable, m.selectedRowIndex)
+		default:
+			query = fmt.Sprintf("SELECT %s FROM %s LIMIT 1 OFFSET %d",
+				fieldName, m.selectedTable, m.selectedRowIndex)
+		}
+
+		// Execute query
+		rows, err := m.db.Query(query)
+		if err != nil {
+			return fieldValueResult{
+				fieldName: fieldName,
+				value:     "",
+				err:       err,
+			}
+		}
+		defer rows.Close()
+
+		if !rows.Next() {
+			return fieldValueResult{
+				fieldName: fieldName,
+				value:     "",
+				err:       fmt.Errorf("no data found"),
+			}
+		}
+
+		var value interface{}
+		err = rows.Scan(&value)
+		if err != nil {
+			return fieldValueResult{
+				fieldName: fieldName,
+				value:     "",
+				err:       err,
+			}
+		}
+
+		var valueStr string
+		if value == nil {
+			valueStr = "NULL"
+		} else {
+			valueStr = fmt.Sprintf("%v", value)
+		}
+
+		return fieldValueResult{
+			fieldName: fieldName,
+			value:     valueStr,
+			err:       nil,
+		}
+	}
 }
 
 // Command to connect to database
@@ -2324,6 +2673,17 @@ type testAndSaveResult struct {
 	connection SavedConnection
 	success    bool
 	err        error
+}
+
+type fieldValueResult struct {
+	fieldName string
+	value     string
+	err       error
+}
+
+type clipboardResult struct {
+	success bool
+	err     error
 }
 
 // Command to clear query result after timeout
@@ -2752,6 +3112,86 @@ func (m model) handleTestAndSaveResult(msg testAndSaveResult) (model, tea.Cmd) {
 		}),
 		m.connectDB(),
 	)
+}
+
+func (m model) handleFieldValueResult(msg fieldValueResult) (model, tea.Cmd) {
+	if msg.err != nil {
+		return m.handleErrorWithRecovery(msg.err, 3)
+	}
+
+	// Set the complete field value and ensure we're in field detail view
+	m.selectedFieldValue = msg.value
+	if m.state != fieldDetailView {
+		m.state = fieldDetailView
+	}
+
+	return m, nil
+}
+
+func (m model) copyToClipboard(content string) tea.Cmd {
+	return func() tea.Msg {
+		// Try to copy to clipboard using various methods
+		var err error
+
+		// Method 1: Try xclip (Linux)
+		if _, cmdErr := exec.LookPath("xclip"); cmdErr == nil {
+			cmd := exec.Command("xclip", "-selection", "clipboard")
+			cmd.Stdin = strings.NewReader(content)
+			err = cmd.Run()
+			if err == nil {
+				return clipboardResult{success: true, err: nil}
+			}
+		}
+
+		// Method 2: Try xsel (Linux alternative)
+		if _, cmdErr := exec.LookPath("xsel"); cmdErr == nil {
+			cmd := exec.Command("xsel", "--clipboard", "--input")
+			cmd.Stdin = strings.NewReader(content)
+			err = cmd.Run()
+			if err == nil {
+				return clipboardResult{success: true, err: nil}
+			}
+		}
+
+		// Method 3: Try pbcopy (macOS)
+		if _, cmdErr := exec.LookPath("pbcopy"); cmdErr == nil {
+			cmd := exec.Command("pbcopy")
+			cmd.Stdin = strings.NewReader(content)
+			err = cmd.Run()
+			if err == nil {
+				return clipboardResult{success: true, err: nil}
+			}
+		}
+
+		// Method 4: Try clip (Windows)
+		if _, cmdErr := exec.LookPath("clip"); cmdErr == nil {
+			cmd := exec.Command("clip")
+			cmd.Stdin = strings.NewReader(content)
+			err = cmd.Run()
+			if err == nil {
+				return clipboardResult{success: true, err: nil}
+			}
+		}
+
+		// If all methods failed
+		return clipboardResult{
+			success: false,
+			err:     fmt.Errorf("clipboard not available (install xclip, xsel, pbcopy, or clip)"),
+		}
+	}
+}
+
+func (m model) handleClipboardResult(msg clipboardResult) (model, tea.Cmd) {
+	if msg.success {
+		m.queryResult = "✅ Content copied to clipboard"
+	} else {
+		m.err = msg.err
+	}
+
+	// Clear the message after a short delay
+	return m, tea.Tick(time.Second*2, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
 }
 
 // Helper functions for getting database information
