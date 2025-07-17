@@ -295,14 +295,18 @@ type model struct {
 	queryHistoryList list.Model
 	isViewingHistory bool
 	// Row detail functionality
-	selectedRowData      []string
-	selectedRowIndex     int
-	rowDetailCurrentPage int
-	rowDetailItemsPerPage int
+	selectedRowData        []string
+	selectedRowIndex       int
+	rowDetailCurrentPage   int
+	rowDetailItemsPerPage  int
 	rowDetailSelectedField int
-	isViewingFullText    bool
-	fullTextScrollOffset int
-	fullTextLinesPerPage int
+	isViewingFullText      bool
+	fullTextScrollOffset   int
+	fullTextLinesPerPage   int
+	// Full text view pagination
+	fullTextCurrentPage   int
+	fullTextItemsPerPage  int
+	fullTextSelectedField int
 }
 
 func initialModel() model {
@@ -432,26 +436,27 @@ func initialModel() model {
 	schemasList.SetShowHelp(false)
 
 	m := model{
-		state:                dbTypeView,
-		dbTypeList:           dbList,
-		savedConnectionsList: savedConnectionsList,
-		textInput:            ti,
-		nameInput:            ni,
-		queryInput:           qi,
-		searchInput:          si,
-		tablesList:           tablesList,
-		columnsTable:         t,
-		queryResultsTable:    queryResultsTable,
-		dataPreviewTable:     dataPreviewTable,
-		queryHistoryList:     queryHistoryList,
-		schemasList:          schemasList,
-		selectedSchema:       "public", // Default to public schema for PostgreSQL
-		savedConnections:     savedConnections,
-		queryHistory:         queryHistory,
-		editingConnectionIdx: -1,
-		spinner:              s,
-		rowDetailItemsPerPage: 8, // Show 8 fields per page
-		fullTextLinesPerPage: 20, // Show 20 lines per page in full text view
+		state:                 dbTypeView,
+		dbTypeList:            dbList,
+		savedConnectionsList:  savedConnectionsList,
+		textInput:             ti,
+		nameInput:             ni,
+		queryInput:            qi,
+		searchInput:           si,
+		tablesList:            tablesList,
+		columnsTable:          t,
+		queryResultsTable:     queryResultsTable,
+		dataPreviewTable:      dataPreviewTable,
+		queryHistoryList:      queryHistoryList,
+		schemasList:           schemasList,
+		selectedSchema:        "public", // Default to public schema for PostgreSQL
+		savedConnections:      savedConnections,
+		queryHistory:          queryHistory,
+		editingConnectionIdx:  -1,
+		spinner:               s,
+		rowDetailItemsPerPage: 8,  // Show 8 fields per page
+		fullTextLinesPerPage:  20, // Show 20 lines per page in full text view
+		fullTextItemsPerPage:  5,  // Show 5 fields per page in full text view
 	}
 
 	// Initialize query history list with loaded data
@@ -781,7 +786,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-
 		case "d":
 			if m.state == savedConnectionsView && len(m.savedConnections) > 0 {
 				// Delete selected connection
@@ -955,10 +959,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if selectedIndex < len(m.dataPreviewTable.Rows()) {
 						m.selectedRowIndex = selectedIndex
 						m.selectedRowData = m.dataPreviewTable.Rows()[selectedIndex]
-						m.rowDetailCurrentPage = 0 // Reset to first page
+						m.rowDetailCurrentPage = 0   // Reset to first page
 						m.rowDetailSelectedField = 0 // Reset field selection
-						m.isViewingFullText = false // Reset full text view
-						m.fullTextScrollOffset = 0 // Reset scroll position
+						m.isViewingFullText = false  // Reset full text view
+						m.fullTextScrollOffset = 0   // Reset scroll position
+						m.fullTextCurrentPage = 0    // Reset full text page
+						m.fullTextSelectedField = 0  // Reset full text field selection
 						m.state = rowDetailView
 					}
 				}
@@ -1115,19 +1121,46 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg, ok := msg.(tea.KeyMsg); ok {
 			columns := m.dataPreviewTable.Columns()
 			totalPages := (len(columns) + m.rowDetailItemsPerPage - 1) / m.rowDetailItemsPerPage
-			
+
 			if m.isViewingFullText {
-				// In full text view, handle scrolling and navigation
+				// In full text view, handle pagination and field navigation
+				columns := m.dataPreviewTable.Columns()
+				totalFullTextPages := (len(columns) + m.fullTextItemsPerPage - 1) / m.fullTextItemsPerPage
+
 				switch msg.String() {
 				case "esc":
 					m.isViewingFullText = false
 					m.fullTextScrollOffset = 0
+					m.fullTextCurrentPage = 0
+					m.fullTextSelectedField = 0
+				case "right", "n":
+					if m.fullTextCurrentPage < totalFullTextPages-1 {
+						m.fullTextCurrentPage++
+						m.fullTextSelectedField = 0
+					}
+				case "left", "p":
+					if m.fullTextCurrentPage > 0 {
+						m.fullTextCurrentPage--
+						m.fullTextSelectedField = 0
+					}
+				case "home":
+					m.fullTextCurrentPage = 0
+					m.fullTextSelectedField = 0
+				case "end":
+					m.fullTextCurrentPage = totalFullTextPages - 1
+					m.fullTextSelectedField = 0
 				case "up", "k":
-					if m.fullTextScrollOffset > 0 {
-						m.fullTextScrollOffset--
+					if m.fullTextSelectedField > 0 {
+						m.fullTextSelectedField--
 					}
 				case "down", "j":
-					m.fullTextScrollOffset++
+					fieldsOnPage := m.fullTextItemsPerPage
+					if m.fullTextCurrentPage == totalFullTextPages-1 {
+						fieldsOnPage = len(columns) - (m.fullTextCurrentPage * m.fullTextItemsPerPage)
+					}
+					if m.fullTextSelectedField < fieldsOnPage-1 {
+						m.fullTextSelectedField++
+					}
 				case "pgup":
 					m.fullTextScrollOffset -= m.fullTextLinesPerPage
 					if m.fullTextScrollOffset < 0 {
@@ -1135,11 +1168,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				case "pgdown":
 					m.fullTextScrollOffset += m.fullTextLinesPerPage
-				case "home":
-					m.fullTextScrollOffset = 0
-				case "end":
-					// Set to a large number, will be clamped in the view
-					m.fullTextScrollOffset = 9999
 				}
 			} else {
 				// In normal row detail view
@@ -1177,6 +1205,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// View full text of selected field
 					m.isViewingFullText = true
 					m.fullTextScrollOffset = 0
+					m.fullTextCurrentPage = 0
+					m.fullTextSelectedField = 0
 				}
 			}
 		}
@@ -1652,12 +1682,12 @@ func (m model) rowDetailView() string {
 
 	// Get column names from the data preview table
 	columns := m.dataPreviewTable.Columns()
-	
+
 	// If viewing full text of a field
 	if m.isViewingFullText {
 		return m.fullRowDataView()
 	}
-	
+
 	// Calculate pagination
 	totalFields := len(columns)
 	totalPages := (totalFields + m.rowDetailItemsPerPage - 1) / m.rowDetailItemsPerPage
@@ -1666,24 +1696,24 @@ func (m model) rowDetailView() string {
 	if endIndex > totalFields {
 		endIndex = totalFields
 	}
-	
+
 	// Build title with pagination info
 	pageInfo := ""
 	if totalPages > 1 {
 		pageInfo = fmt.Sprintf(" (Page %d of %d)", m.rowDetailCurrentPage+1, totalPages)
 	}
 	title := titleStyle.Render(fmt.Sprintf("Row Details - %s (Row %d)%s", m.selectedTable, m.selectedRowIndex+1, pageInfo))
-	
+
 	// Build the row detail content for current page
 	var details []string
 	for i := startIndex; i < endIndex; i++ {
 		if i < len(columns) && i < len(m.selectedRowData) {
 			col := columns[i]
 			value := m.selectedRowData[i]
-			
+
 			// Check if this field is selected
 			isSelected := (i - startIndex) == m.rowDetailSelectedField
-			
+
 			// Handle empty values
 			displayValue := value
 			if value == "" {
@@ -1691,7 +1721,7 @@ func (m model) rowDetailView() string {
 			} else if strings.TrimSpace(value) == "" {
 				displayValue = lipgloss.NewStyle().Foreground(lightGray).Render("(whitespace)")
 			}
-			
+
 			// Handle very long values by truncating and showing they're truncated
 			maxValueLength := 150 // Increased from 90
 			truncated := false
@@ -1699,77 +1729,77 @@ func (m model) rowDetailView() string {
 				displayValue = value[:maxValueLength] + "..."
 				truncated = true
 			}
-			
+
 			// Handle multi-line values
 			if strings.Contains(displayValue, "\n") {
 				lines := strings.Split(displayValue, "\n")
 				if len(lines) > 3 { // Increased from 2 to 3
 					// Show first 3 lines and indicate more
-					displayValue = strings.Join(lines[:3], "\n") + "\n" + 
+					displayValue = strings.Join(lines[:3], "\n") + "\n" +
 						lipgloss.NewStyle().Foreground(lightGray).Render("... (truncated)")
 					truncated = true
 				}
 			}
-			
+
 			// Format field name and value with better styling
 			fieldNameStyle := lipgloss.NewStyle().Foreground(accentMagenta).Bold(true)
 			if isSelected {
 				fieldNameStyle = fieldNameStyle.Background(primaryMagenta).Foreground(white)
 			}
 			fieldName := fieldNameStyle.Render(fmt.Sprintf("%-20s", col.Title))
-			
+
 			fieldValueStyle := lipgloss.NewStyle().Foreground(white)
 			if isSelected {
 				fieldValueStyle = fieldValueStyle.Background(lightMagenta).Foreground(darkGray)
 			}
 			fieldValue := fieldValueStyle.Render(displayValue)
-			
+
 			// Add truncation indicator
 			truncationIndicator := ""
 			if truncated {
 				truncationIndicator = " " + lipgloss.NewStyle().Foreground(warningOrange).Render("(truncated)")
 			}
-			
+
 			fieldContent := fmt.Sprintf("%s │ %s%s", fieldName, fieldValue, truncationIndicator)
 			details = append(details, fieldContent)
 		}
 	}
-	
+
 	// Add separator between fields
 	detailContent := strings.Join(details, "\n"+strings.Repeat("─", 100)+"\n")
-	
+
 	// Create card style for better presentation
 	cardStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(primaryMagenta).
 		Padding(1, 2).
 		Margin(1, 0)
-	
+
 	// Wrap content in card
 	contentCard := cardStyle.Render(detailContent)
-	
+
 	// Build navigation help text
 	var navHelp []string
-	navHelp = append(navHelp, 
-		keyStyle.Render("↑/↓") + " or " + keyStyle.Render("j/k") + ": select field",
-		keyStyle.Render("enter/space") + ": view full text",
+	navHelp = append(navHelp,
+		keyStyle.Render("↑/↓")+" or "+keyStyle.Render("j/k")+": select field",
+		keyStyle.Render("enter/space")+": view full text",
 	)
 	if totalPages > 1 {
-		navHelp = append(navHelp, 
-			keyStyle.Render("←/→") + " or " + keyStyle.Render("p/n") + ": navigate pages",
-			keyStyle.Render("home/end") + ": first/last page",
+		navHelp = append(navHelp,
+			keyStyle.Render("←/→")+" or "+keyStyle.Render("p/n")+": navigate pages",
+			keyStyle.Render("home/end")+": first/last page",
 		)
 	}
-	navHelp = append(navHelp, keyStyle.Render("esc") + ": back to data preview")
-	
+	navHelp = append(navHelp, keyStyle.Render("esc")+": back to data preview")
+
 	helpText := helpStyle.Render(strings.Join(navHelp, " • "))
-	
+
 	// Field summary
 	fieldSummary := infoStyle.Render(fmt.Sprintf("Showing fields %d-%d of %d", startIndex+1, endIndex, totalFields))
-	
+
 	// Combine all elements
 	content := title + "\n\n" + fieldSummary + "\n\n" + contentCard
-	
+
 	return docStyle.Render(content + "\n\n" + helpText)
 }
 
@@ -1778,13 +1808,13 @@ func (m model) wrapText(text string, width int) string {
 	if len(text) <= width {
 		return text
 	}
-	
+
 	var result strings.Builder
 	words := strings.Fields(text)
 	if len(words) == 0 {
 		return text
 	}
-	
+
 	currentLine := words[0]
 	for i := 1; i < len(words); i++ {
 		if len(currentLine)+len(words[i])+1 <= width {
@@ -1816,81 +1846,185 @@ func max(a, b int) int {
 
 // Function to display complete row data by querying database directly
 func (m model) fullRowDataView() string {
-	title := fmt.Sprintf("Complete Row Data - %s (Row %d)", m.selectedTable, m.selectedRowIndex+1)
-	
 	// Build query to get the complete row data
 	var query string
 	switch m.selectedDB.driver {
 	case "postgres":
 		if m.selectedSchema != "" {
-			query = fmt.Sprintf(`SELECT * FROM "%s"."%s" LIMIT %d OFFSET %d`, 
+			query = fmt.Sprintf(`SELECT * FROM "%s"."%s" LIMIT %d OFFSET %d`,
 				m.selectedSchema, m.selectedTable, 1, m.selectedRowIndex)
 		} else {
-			query = fmt.Sprintf(`SELECT * FROM "%s" LIMIT %d OFFSET %d`, 
+			query = fmt.Sprintf(`SELECT * FROM "%s" LIMIT %d OFFSET %d`,
 				m.selectedTable, 1, m.selectedRowIndex)
 		}
 	case "mysql":
-		query = fmt.Sprintf("SELECT * FROM `%s` LIMIT %d OFFSET %d", 
+		query = fmt.Sprintf("SELECT * FROM `%s` LIMIT %d OFFSET %d",
 			m.selectedTable, 1, m.selectedRowIndex)
 	case "sqlite3":
-		query = fmt.Sprintf(`SELECT * FROM "%s" LIMIT %d OFFSET %d`, 
+		query = fmt.Sprintf(`SELECT * FROM "%s" LIMIT %d OFFSET %d`,
 			m.selectedTable, 1, m.selectedRowIndex)
 	default:
-		query = fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", 
+		query = fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d",
 			m.selectedTable, 1, m.selectedRowIndex)
 	}
-	
+
 	// Execute query to get complete row data
 	rows, err := m.db.Query(query)
 	if err != nil {
-		return fmt.Sprintf("%s\n\nError: %v\n\nesc: back to row details", title, err)
+		return fmt.Sprintf("Complete Row Data - %s (Row %d)\n\nError: %v\n\nesc: back to row details",
+			m.selectedTable, m.selectedRowIndex+1, err)
 	}
 	defer rows.Close()
-	
+
 	// Get column names
 	columnNames, err := rows.Columns()
 	if err != nil {
-		return fmt.Sprintf("%s\n\nError getting columns: %v\n\nesc: back to row details", title, err)
+		return fmt.Sprintf("Complete Row Data - %s (Row %d)\n\nError getting columns: %v\n\nesc: back to row details",
+			m.selectedTable, m.selectedRowIndex+1, err)
 	}
-	
+
 	// Get the row data
 	if !rows.Next() {
-		return fmt.Sprintf("%s\n\nNo data found\n\nesc: back to row details", title)
+		return fmt.Sprintf("Complete Row Data - %s (Row %d)\n\nNo data found\n\nesc: back to row details",
+			m.selectedTable, m.selectedRowIndex+1)
 	}
-	
+
 	// Create slice to hold values
 	values := make([]interface{}, len(columnNames))
 	valuePtrs := make([]interface{}, len(columnNames))
 	for i := range values {
 		valuePtrs[i] = &values[i]
 	}
-	
+
 	err = rows.Scan(valuePtrs...)
 	if err != nil {
-		return fmt.Sprintf("%s\n\nError reading row: %v\n\nesc: back to row details", title, err)
+		return fmt.Sprintf("Complete Row Data - %s (Row %d)\n\nError reading row: %v\n\nesc: back to row details",
+			m.selectedTable, m.selectedRowIndex+1, err)
 	}
-	
-	// Build the display content
-	content := fmt.Sprintf("%s\n\n", title)
-	
-	for i, columnName := range columnNames {
-		var valueStr string
-		if values[i] == nil {
-			valueStr = "NULL"
-		} else {
-			valueStr = fmt.Sprintf("%v", values[i])
-		}
-		
-		if valueStr == "" {
-			valueStr = "(empty)"
-		}
-		
-		content += fmt.Sprintf("%s: %s\n", columnName, valueStr)
+
+	// Calculate pagination for full text view
+	totalFields := len(columnNames)
+	totalPages := (totalFields + m.fullTextItemsPerPage - 1) / m.fullTextItemsPerPage
+	startIndex := m.fullTextCurrentPage * m.fullTextItemsPerPage
+	endIndex := startIndex + m.fullTextItemsPerPage
+	if endIndex > totalFields {
+		endIndex = totalFields
 	}
-	
-	content += "\nesc: back to row details"
-	
-	return content
+
+	// Build title with pagination info
+	pageInfo := ""
+	if totalPages > 1 {
+		pageInfo = fmt.Sprintf(" (Page %d of %d)", m.fullTextCurrentPage+1, totalPages)
+	}
+	title := titleStyle.Render(fmt.Sprintf("Complete Row Data - %s (Row %d)%s",
+		m.selectedTable, m.selectedRowIndex+1, pageInfo))
+
+	// Build the display content for current page
+	var fieldDetails []string
+	for i := startIndex; i < endIndex; i++ {
+		if i < len(columnNames) {
+			columnName := columnNames[i]
+			var valueStr string
+			if values[i] == nil {
+				valueStr = lipgloss.NewStyle().Foreground(lightGray).Render("NULL")
+			} else {
+				valueStr = fmt.Sprintf("%v", values[i])
+			}
+
+			if valueStr == "" {
+				valueStr = lipgloss.NewStyle().Foreground(lightGray).Render("(empty)")
+			} else if strings.TrimSpace(valueStr) == "" {
+				valueStr = lipgloss.NewStyle().Foreground(lightGray).Render("(whitespace)")
+			}
+
+			// Check if this field is selected
+			isSelected := (i - startIndex) == m.fullTextSelectedField
+
+			// Format field name with better styling
+			fieldNameStyle := lipgloss.NewStyle().Foreground(accentMagenta).Bold(true)
+			if isSelected {
+				fieldNameStyle = fieldNameStyle.Background(primaryMagenta).Foreground(white)
+			}
+			fieldName := fieldNameStyle.Render(fmt.Sprintf("%-20s", columnName))
+
+			// Handle scrolling for selected field
+			displayValue := valueStr
+			if isSelected && len(valueStr) > 0 {
+				// Apply scrolling to the selected field's value
+				lines := strings.Split(valueStr, "\n")
+				if m.fullTextScrollOffset < len(lines) {
+					maxLines := min(m.fullTextLinesPerPage, len(lines)-m.fullTextScrollOffset)
+					if maxLines > 0 {
+						displayValue = strings.Join(lines[m.fullTextScrollOffset:m.fullTextScrollOffset+maxLines], "\n")
+					}
+				}
+
+				// Add scroll indicators
+				if m.fullTextScrollOffset > 0 {
+					displayValue = lipgloss.NewStyle().Foreground(warningOrange).Render("↑ (scroll up)") + "\n" + displayValue
+				}
+				if m.fullTextScrollOffset+m.fullTextLinesPerPage < len(lines) {
+					displayValue = displayValue + "\n" + lipgloss.NewStyle().Foreground(warningOrange).Render("↓ (scroll down)")
+				}
+			}
+
+			// Format field value with styling
+			fieldValueStyle := lipgloss.NewStyle().Foreground(white)
+			if isSelected {
+				fieldValueStyle = fieldValueStyle.Background(lightMagenta).Foreground(darkGray)
+			}
+			fieldValue := fieldValueStyle.Render(displayValue)
+
+			// Combine field name and value
+			fieldContent := fmt.Sprintf("%s │ %s", fieldName, fieldValue)
+			fieldDetails = append(fieldDetails, fieldContent)
+		}
+	}
+
+	// Join fields with separators
+	detailContent := strings.Join(fieldDetails, "\n"+strings.Repeat("─", 120)+"\n")
+
+	// Create card style for better presentation
+	cardStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(primaryMagenta).
+		Padding(1, 2).
+		Margin(1, 0)
+
+	// Wrap content in card
+	contentCard := cardStyle.Render(detailContent)
+
+	// Build navigation help text
+	var navHelp []string
+	navHelp = append(navHelp,
+		keyStyle.Render("↑/↓")+" or "+keyStyle.Render("j/k")+": select field",
+		keyStyle.Render("pgup/pgdown")+": scroll field content",
+	)
+	if totalPages > 1 {
+		navHelp = append(navHelp,
+			keyStyle.Render("←/→")+" or "+keyStyle.Render("p/n")+": navigate pages",
+			keyStyle.Render("home/end")+": first/last page",
+		)
+	}
+	navHelp = append(navHelp, keyStyle.Render("esc")+": back to row details")
+
+	helpText := helpStyle.Render(strings.Join(navHelp, " • "))
+
+	// Field summary
+	fieldSummary := infoStyle.Render(fmt.Sprintf("Showing fields %d-%d of %d",
+		startIndex+1, endIndex, totalFields))
+
+	// Selected field info
+	selectedFieldInfo := ""
+	if startIndex+m.fullTextSelectedField < len(columnNames) {
+		selectedFieldName := columnNames[startIndex+m.fullTextSelectedField]
+		selectedFieldInfo = infoStyle.Render(fmt.Sprintf("Selected: %s", selectedFieldName))
+	}
+
+	// Combine all elements
+	content := title + "\n\n" + fieldSummary + "\n" + selectedFieldInfo + "\n\n" + contentCard
+
+	return docStyle.Render(content + "\n\n" + helpText)
 }
 
 // Command to connect to database
@@ -2014,7 +2148,6 @@ func (m model) loadTablesForSchema() tea.Cmd {
 		return connectResult{tables: tables, tableInfos: tableInfos}
 	}
 }
-
 
 // Command to load data preview
 func (m model) loadDataPreview() tea.Cmd {
@@ -2145,13 +2278,13 @@ func (m model) executeQuery(query string) tea.Cmd {
 
 // Result messages
 type connectResult struct {
-	db                     *sql.DB
-	tables                 []string
-	tableInfos             []tableInfo
-	schemas                []schemaInfo
-	selectedSchema         string
+	db                      *sql.DB
+	tables                  []string
+	tableInfos              []tableInfo
+	schemas                 []schemaInfo
+	selectedSchema          string
 	requiresSchemaSelection bool
-	err                    error
+	err                     error
 }
 
 type testConnectionResult struct {
@@ -2185,7 +2318,6 @@ type exportResult struct {
 	rowCount int
 	err      error
 }
-
 
 type testAndSaveResult struct {
 	name       string
@@ -2598,7 +2730,6 @@ func (m model) handleExportResult(msg exportResult) (model, tea.Cmd) {
 	})
 }
 
-
 func (m model) handleTestAndSaveResult(msg testAndSaveResult) (model, tea.Cmd) {
 	m.isSavingConnection = false
 	if !msg.success {
@@ -2656,7 +2787,7 @@ func getTables(db *sql.DB, driver string) ([]string, error) {
 
 func getSchemas(db *sql.DB, driver string) ([]schemaInfo, error) {
 	var schemas []schemaInfo
-	
+
 	switch driver {
 	case "postgres":
 		query := `
@@ -2933,7 +3064,7 @@ func getColumns(db *sql.DB, driver, tableName, schema string) ([][]string, error
 
 	var rows *sql.Rows
 	var err error
-	
+
 	switch driver {
 	case "postgres":
 		rows, err = db.Query(query, tableName, schema)
@@ -2944,7 +3075,7 @@ func getColumns(db *sql.DB, driver, tableName, schema string) ([][]string, error
 	default:
 		rows, err = db.Query(query, tableName)
 	}
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -3241,7 +3372,7 @@ func (m *model) updateQueryHistoryList() {
 		if displayQuery == "" {
 			displayQuery = "[Empty Query]"
 		}
-		
+
 		if len(displayQuery) > 60 {
 			displayQuery = displayQuery[:60] + "..."
 		}
