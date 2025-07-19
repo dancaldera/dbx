@@ -190,6 +190,7 @@ const (
 	fieldDetailView
 	indexesView
 	indexDetailView
+	relationshipsView
 )
 
 // Saved connection
@@ -257,6 +258,7 @@ type model struct {
 	queryResultsTable    table.Model
 	dataPreviewTable     table.Model
 	indexesTable         table.Model
+	relationshipsTable   table.Model
 	selectedDB           dbType
 	connectionStr        string
 	db                   *sql.DB
@@ -452,6 +454,20 @@ func initialModel() model {
 	)
 	indexesTable.SetStyles(getMagentaTableStyles())
 
+	// Relationships table
+	relationshipsTable := table.New(
+		table.WithColumns([]table.Column{
+			{Title: "From Table", Width: 20},
+			{Title: "From Column", Width: 20},
+			{Title: "To Table", Width: 20},
+			{Title: "To Column", Width: 20},
+			{Title: "Constraint Name", Width: 25},
+		}),
+		table.WithFocused(true),
+		table.WithHeight(10),
+	)
+	relationshipsTable.SetStyles(getMagentaTableStyles())
+
 	// Initialize spinner
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -490,6 +506,7 @@ func initialModel() model {
 		queryResultsTable:       queryResultsTable,
 		dataPreviewTable:        dataPreviewTable,
 		indexesTable:            indexesTable,
+		relationshipsTable:      relationshipsTable,
 		queryHistoryList:        queryHistoryList,
 		schemasList:             schemasList,
 		selectedSchema:          "public", // Default to public schema for PostgreSQL
@@ -532,6 +549,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleDataPreviewResult(msg)
 	case indexesResult:
 		return m.handleIndexesResult(msg)
+	case relationshipsResult:
+		return m.handleRelationshipsResult(msg)
 	case exportResult:
 		return m.handleExportResult(msg)
 	case testAndSaveResult:
@@ -672,6 +691,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = columnsView
 			case indexDetailView:
 				m.state = indexesView
+			case relationshipsView:
+				m.state = tablesView
 			case queryHistoryView:
 				m.state = queryView
 			}
@@ -730,6 +751,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.queryInput.Focus()
 				m.queryResultsTable.Blur()
 				return m, nil
+			}
+
+		case "f":
+			// Show foreign key relationships from tables view
+			if m.state == tablesView && m.db != nil && !m.isSearchingTables {
+				m.state = relationshipsView
+				return m, m.loadRelationships()
 			}
 
 		case "ctrl+f", "/":
@@ -1219,6 +1247,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.indexesTable, cmd = m.indexesTable.Update(msg)
+	case relationshipsView:
+		m.relationshipsTable, cmd = m.relationshipsTable.Update(msg)
 	case rowDetailView:
 		// Handle pagination and navigation keys for row detail view
 		if msg, ok := msg.(tea.KeyMsg); ok {
@@ -1487,6 +1517,8 @@ func (m model) View() string {
 		return m.indexesView()
 	case indexDetailView:
 		return m.indexDetailView()
+	case relationshipsView:
+		return m.relationshipsView()
 	}
 	return ""
 }
@@ -1741,6 +1773,7 @@ func (m model) tablesView() string {
 			keyStyle.Render("enter") + ": view columns • " +
 				keyStyle.Render("p") + ": preview data • " +
 				keyStyle.Render("r") + ": run query • " +
+				keyStyle.Render("f") + ": relationships • " +
 				keyStyle.Render("Ctrl+F") + ": search • " +
 				keyStyle.Render("esc") + ": disconnect")
 	}
@@ -1852,6 +1885,25 @@ func (m model) indexDetailView() string {
 	// Simple help text without boxes
 	content += labelStyle.Render("esc") + ": back to indexes"
 
+	return docStyle.Render(content)
+}
+
+func (m model) relationshipsView() string {
+	content := titleStyle.Render("🔗 Foreign Key Relationships") + "\n\n"
+
+	if m.err != nil {
+		content += errorStyle.Render("❌ "+m.err.Error()) + "\n\n"
+	}
+
+	// Show the relationships table
+	content += m.relationshipsTable.View() + "\n\n"
+
+	// Help text
+	helpText := helpStyle.Render(
+		keyStyle.Render("↑/↓") + ": navigate • " +
+			keyStyle.Render("esc") + ": back to tables")
+
+	content += "\n" + helpText
 	return docStyle.Render(content)
 }
 
@@ -2819,6 +2871,17 @@ func (m model) loadIndexes() tea.Cmd {
 	}
 }
 
+// Command to load foreign key relationships
+func (m model) loadRelationships() tea.Cmd {
+	return func() tea.Msg {
+		relationships, err := getForeignKeyRelationships(m.db, m.selectedDB.driver, m.selectedSchema)
+		return relationshipsResult{
+			relationships: relationships,
+			err:           err,
+		}
+	}
+}
+
 // Command to execute query
 func (m model) executeQuery(query string) tea.Cmd {
 	return func() tea.Msg {
@@ -2910,6 +2973,11 @@ type dataPreviewResult struct {
 type indexesResult struct {
 	indexes [][]string
 	err     error
+}
+
+type relationshipsResult struct {
+	relationships [][]string
+	err           error
 }
 
 type clearResultMsg struct{}
@@ -3460,6 +3528,29 @@ func (m model) handleIndexesResult(msg indexesResult) (model, tea.Cmd) {
 	// Update the indexes table
 	m.indexesTable.SetRows(rows)
 	m.indexesTable.Focus()
+
+	return m, nil
+}
+
+func (m model) handleRelationshipsResult(msg relationshipsResult) (model, tea.Cmd) {
+	if msg.err != nil {
+		return m.handleErrorWithRecovery(msg.err, 3)
+	}
+
+	m.err = nil
+	m.state = relationshipsView
+
+	// Create rows for the relationships table
+	rows := make([]table.Row, 0)
+	for _, relationshipRow := range msg.relationships {
+		if len(relationshipRow) >= 5 {
+			rows = append(rows, table.Row(relationshipRow))
+		}
+	}
+
+	// Update the relationships table
+	m.relationshipsTable.SetRows(rows)
+	m.relationshipsTable.Focus()
 
 	return m, nil
 }
@@ -4187,6 +4278,100 @@ func getConstraints(db *sql.DB, driver, tableName, schema string) ([][]string, e
 	}
 
 	return constraints, nil
+}
+
+func getForeignKeyRelationships(db *sql.DB, driver, schema string) ([][]string, error) {
+	var query string
+	var args []interface{}
+
+	switch driver {
+	case "postgres":
+		query = `
+			SELECT 
+				tc.table_name as from_table,
+				kcu.column_name as from_column,
+				ccu.table_name as to_table,
+				ccu.column_name as to_column,
+				tc.constraint_name
+			FROM 
+				information_schema.table_constraints AS tc 
+				JOIN information_schema.key_column_usage AS kcu
+					ON tc.constraint_name = kcu.constraint_name
+					AND tc.table_schema = kcu.table_schema
+				JOIN information_schema.constraint_column_usage AS ccu
+					ON ccu.constraint_name = tc.constraint_name
+					AND ccu.table_schema = tc.table_schema
+			WHERE tc.constraint_type = 'FOREIGN KEY'
+			AND tc.table_schema = $1
+			ORDER BY tc.table_name, tc.constraint_name`
+		args = []interface{}{schema}
+
+	case "mysql":
+		query = `
+			SELECT 
+				TABLE_NAME as from_table,
+				COLUMN_NAME as from_column,
+				REFERENCED_TABLE_NAME as to_table,
+				REFERENCED_COLUMN_NAME as to_column,
+				CONSTRAINT_NAME
+			FROM 
+				INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+			WHERE 
+				REFERENCED_TABLE_SCHEMA = DATABASE()
+				AND REFERENCED_TABLE_NAME IS NOT NULL
+			ORDER BY TABLE_NAME, CONSTRAINT_NAME`
+
+	case "sqlite3":
+		// SQLite requires a different approach - we'll query all tables and their foreign keys
+		tables, err := getTables(db, driver)
+		if err != nil {
+			return nil, err
+		}
+
+		var relationships [][]string
+		for _, tableName := range tables {
+			fkQuery := fmt.Sprintf("PRAGMA foreign_key_list(%s)", tableName)
+			rows, err := db.Query(fkQuery)
+			if err != nil {
+				continue // Skip tables that can't be queried
+			}
+
+			for rows.Next() {
+				var id, seq int
+				var table, from, to, onUpdate, onDelete, match string
+
+				err := rows.Scan(&id, &seq, &table, &from, &to, &onUpdate, &onDelete, &match)
+				if err != nil {
+					continue
+				}
+
+				constraintName := fmt.Sprintf("fk_%s_%s", tableName, from)
+				relationships = append(relationships, []string{tableName, from, table, to, constraintName})
+			}
+			rows.Close()
+		}
+		return relationships, nil
+	}
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var relationships [][]string
+	for rows.Next() {
+		var fromTable, fromColumn, toTable, toColumn, constraintName string
+
+		err := rows.Scan(&fromTable, &fromColumn, &toTable, &toColumn, &constraintName)
+		if err != nil {
+			return nil, err
+		}
+
+		relationships = append(relationships, []string{fromTable, fromColumn, toTable, toColumn, constraintName})
+	}
+
+	return relationships, nil
 }
 
 // Method to update saved connections list
