@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -320,6 +321,10 @@ type model struct {
 	fieldDetailHorizontalOffset int
 	fieldDetailLinesPerPage     int
 	fieldDetailCharsPerLine     int
+	// Field editing
+	fieldTextarea      textarea.Model
+	isEditingField     bool
+	originalFieldValue string
 	// Index detail view
 	selectedIndexName       string
 	selectedIndexType       string
@@ -452,6 +457,12 @@ func initialModel() model {
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(accentMagenta)
 
+	// Initialize textarea for field editing
+	ta := textarea.New()
+	ta.Placeholder = "Enter field content..."
+	ta.SetWidth(80)
+	ta.SetHeight(20)
+
 	// Query history list
 	queryHistoryList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
 	queryHistoryList.Title = "📝 Query History"
@@ -491,6 +502,7 @@ func initialModel() model {
 		fullTextItemsPerPage:    5,   // Show 5 fields per page in full text view
 		fieldDetailLinesPerPage: 25,  // Show 25 lines per page in field detail view
 		fieldDetailCharsPerLine: 120, // Show 120 characters per line in field detail view
+		fieldTextarea:           ta,  // Initialize textarea for field editing
 	}
 
 	// Initialize query history list with loaded data
@@ -500,7 +512,7 @@ func initialModel() model {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, m.spinner.Tick)
+	return tea.Batch(textinput.Blink, textarea.Blink, m.spinner.Tick)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -526,6 +538,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleTestAndSaveResult(msg)
 	case fieldValueResult:
 		return m.handleFieldValueResult(msg)
+	case fieldUpdateResult:
+		return m.handleFieldUpdateResult(msg)
 	case clipboardResult:
 		return m.handleClipboardResult(msg)
 	case clearResultMsg:
@@ -644,7 +658,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case rowDetailView:
 				m.state = dataPreviewView
 			case fieldDetailView:
-				m.state = rowDetailView
+				// Check if we're in edit mode first
+				if m.isEditingField {
+					// Exit edit mode without saving
+					m.isEditingField = false
+					m.fieldTextarea.Blur()
+					// Restore original value
+					m.selectedFieldValue = m.originalFieldValue
+				} else {
+					m.state = rowDetailView
+				}
 			case indexesView:
 				m.state = columnsView
 			case indexDetailView:
@@ -1337,10 +1360,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "c":
 				// Copy complete field value to clipboard
 				return m, m.copyToClipboard(m.selectedFieldValue)
+			case "e":
+				// Enter edit mode
+				if !m.isEditingField {
+					m.isEditingField = true
+					m.originalFieldValue = m.selectedFieldValue
+					m.fieldTextarea.SetValue(m.selectedFieldValue)
+					m.fieldTextarea.Focus()
+					return m, textarea.Blink
+				}
+			case "f1":
+				// Test connection (placeholder for future functionality)
+				// For now, just cancel edit mode
+				if m.isEditingField {
+					m.isEditingField = false
+					m.fieldTextarea.Blur()
+					// Restore original value without saving
+					m.selectedFieldValue = m.originalFieldValue
+				}
+			case "f2":
+				// Save and continue editing
+				if m.isEditingField {
+					newValue := m.fieldTextarea.Value()
+					return m, m.updateFieldValue(m.selectedFieldName, newValue, false)
+				}
+			case "f3":
+				// Save and exit edit mode
+				if m.isEditingField {
+					newValue := m.fieldTextarea.Value()
+					return m, m.updateFieldValue(m.selectedFieldName, newValue, true)
+				}
 			}
 
-			// Handle vertical scrolling for multi-line content
-			if totalLines > 1 {
+			// Handle vertical scrolling for multi-line content (only when not editing)
+			if totalLines > 1 && !m.isEditingField {
 				switch msg.String() {
 				case "up", "k":
 					if m.fieldDetailScrollOffset > 0 {
@@ -1378,6 +1431,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.fieldDetailScrollOffset = maxOffset
 				}
 			}
+		}
+
+		// Update textarea when in edit mode
+		if m.isEditingField {
+			m.fieldTextarea, cmd = m.fieldTextarea.Update(msg)
 		}
 	default:
 		// Handle spinner messages
@@ -1784,7 +1842,7 @@ func (m model) indexDetailView() string {
 
 	// Simple help text without boxes
 	content += labelStyle.Render("esc") + ": back to indexes"
-	
+
 	return docStyle.Render(content)
 }
 
@@ -2395,15 +2453,19 @@ func (m model) fieldDetailView() string {
 
 	statusLine := strings.Join(statusParts, " • ")
 
-	// Simple help
+	// Help text depends on edit mode
 	var helpParts []string
-	if maxLineLength > m.fieldDetailCharsPerLine {
-		helpParts = append(helpParts, "←/→: scroll horizontal")
+	if m.isEditingField {
+		helpParts = append(helpParts, "F1: cancel", "F2: save & continue", "F3: save & exit", "esc: cancel")
+	} else {
+		if maxLineLength > m.fieldDetailCharsPerLine {
+			helpParts = append(helpParts, "←/→: scroll horizontal")
+		}
+		if lineCount > m.fieldDetailLinesPerPage {
+			helpParts = append(helpParts, "↑/↓: scroll vertical")
+		}
+		helpParts = append(helpParts, "c: copy to clipboard", "e: edit", "esc: back")
 	}
-	if lineCount > m.fieldDetailLinesPerPage {
-		helpParts = append(helpParts, "↑/↓: scroll vertical")
-	}
-	helpParts = append(helpParts, "c: copy to clipboard", "esc: back")
 
 	helpText := strings.Join(helpParts, " • ")
 
@@ -2411,7 +2473,15 @@ func (m model) fieldDetailView() string {
 	result := title + "\n"
 	result += statusLine + "\n"
 	result += strings.Repeat("-", 60) + "\n"
-	result += visibleContent + "\n"
+
+	if m.isEditingField {
+		// Show textarea for editing
+		result += m.fieldTextarea.View() + "\n"
+	} else {
+		// Show normal content view
+		result += visibleContent + "\n"
+	}
+
 	result += strings.Repeat("-", 60) + "\n"
 	result += helpText
 
@@ -2847,6 +2917,14 @@ type clipboardResult struct {
 	err     error
 }
 
+type fieldUpdateResult struct {
+	fieldName string
+	newValue  string
+	exitEdit  bool
+	success   bool
+	err       error
+}
+
 // Command to clear query result after timeout
 func clearResultAfterTimeout() tea.Cmd {
 	return tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
@@ -2907,6 +2985,121 @@ func (m model) testAndSaveConnection(name, connectionStr string) tea.Cmd {
 			connection: newConnection,
 			success:    true,
 			err:        nil,
+		}
+	}
+}
+
+// Command to update field value in database
+func (m model) updateFieldValue(fieldName, newValue string, exitEdit bool) tea.Cmd {
+	return func() tea.Msg {
+		// Build UPDATE query with WHERE clause using primary key
+		var query string
+		var args []interface{}
+
+		// Get column information to find primary key
+		columns := m.dataPreviewTable.Columns()
+		if len(columns) == 0 || len(m.selectedRowData) == 0 {
+			return fieldUpdateResult{
+				fieldName: fieldName,
+				newValue:  newValue,
+				exitEdit:  exitEdit,
+				success:   false,
+				err:       fmt.Errorf("cannot identify row for update - missing column or row data"),
+			}
+		}
+
+		// Find the primary key column (usually 'id')
+		var pkColumnName string
+		var pkValue string
+		
+		for i, col := range columns {
+			columnName := col.Title
+			if columnName == "id" || columnName == "uuid" || columnName == "pk" {
+				if i < len(m.selectedRowData) {
+					pkColumnName = columnName
+					pkValue = m.selectedRowData[i]
+					break
+				}
+			}
+		}
+
+		if pkColumnName == "" {
+			return fieldUpdateResult{
+				fieldName: fieldName,
+				newValue:  newValue,
+				exitEdit:  exitEdit,
+				success:   false,
+				err:       fmt.Errorf("no primary key found - cannot safely update row"),
+			}
+		}
+
+		// Build simple UPDATE query using primary key
+		switch m.selectedDB.driver {
+		case "postgres":
+			if m.selectedSchema != "" {
+				query = fmt.Sprintf(`UPDATE "%s"."%s" SET "%s" = $1 WHERE "%s" = $2`,
+					m.selectedSchema, m.selectedTable, fieldName, pkColumnName)
+			} else {
+				query = fmt.Sprintf(`UPDATE "%s" SET "%s" = $1 WHERE "%s" = $2`,
+					m.selectedTable, fieldName, pkColumnName)
+			}
+			args = []interface{}{newValue, pkValue}
+
+		case "mysql":
+			query = fmt.Sprintf("UPDATE `%s` SET `%s` = ? WHERE `%s` = ?", 
+				m.selectedTable, fieldName, pkColumnName)
+			args = []interface{}{newValue, pkValue}
+
+		case "sqlite3":
+			query = fmt.Sprintf("UPDATE `%s` SET `%s` = ? WHERE `%s` = ?", 
+				m.selectedTable, fieldName, pkColumnName)
+			args = []interface{}{newValue, pkValue}
+		}
+
+		// Debug: Log the query and arguments
+		fmt.Printf("DEBUG UPDATE QUERY: %s\n", query)
+		fmt.Printf("DEBUG ARGS: %+v\n", args)
+
+		// Execute the update with safety check
+		result, err := m.db.Exec(query, args...)
+		if err != nil {
+			return fieldUpdateResult{
+				fieldName: fieldName,
+				newValue:  newValue,
+				exitEdit:  exitEdit,
+				success:   false,
+				err:       fmt.Errorf("SQL error: %v (query: %s)", err, query),
+			}
+		}
+
+		// Check that exactly one row was affected
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return fieldUpdateResult{
+				fieldName: fieldName,
+				newValue:  newValue,
+				exitEdit:  exitEdit,
+				success:   false,
+				err:       fmt.Errorf("could not verify update: %v", err),
+			}
+		}
+
+		if rowsAffected != 1 {
+			return fieldUpdateResult{
+				fieldName: fieldName,
+				newValue:  newValue,
+				exitEdit:  exitEdit,
+				success:   false,
+				err:       fmt.Errorf("unsafe update: %d rows would be affected instead of 1", rowsAffected),
+			}
+		}
+
+		return fieldUpdateResult{
+			fieldName: fieldName,
+			newValue:  newValue,
+			exitEdit:  exitEdit,
+			success:   true,
+			err:       nil,
 		}
 	}
 }
@@ -3363,6 +3556,33 @@ func (m model) copyToClipboard(content string) tea.Cmd {
 			err:     fmt.Errorf("clipboard not available (install xclip, xsel, pbcopy, or clip)"),
 		}
 	}
+}
+
+func (m model) handleFieldUpdateResult(msg fieldUpdateResult) (model, tea.Cmd) {
+	if msg.err != nil {
+		return m.handleErrorWithRecovery(msg.err, 3)
+	}
+
+	// Update the field value and possibly exit edit mode
+	m.selectedFieldValue = msg.newValue
+
+	// Also update the row data so the table shows the new value
+	if m.selectedFieldIndex >= 0 && m.selectedFieldIndex < len(m.selectedRowData) {
+		m.selectedRowData[m.selectedFieldIndex] = msg.newValue
+	}
+
+	if msg.exitEdit {
+		m.isEditingField = false
+		m.fieldTextarea.Blur()
+	}
+
+	// Show success message
+	m.queryResult = fmt.Sprintf("✅ Field '%s' updated successfully", msg.fieldName)
+
+	// Clear the message after a short delay
+	return m, tea.Tick(time.Second*2, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
 }
 
 func (m model) handleClipboardResult(msg clipboardResult) (model, tea.Cmd) {
