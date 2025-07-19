@@ -1192,6 +1192,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case queryHistoryView:
 		m.queryHistoryList, cmd = m.queryHistoryList.Update(msg)
 	case dataPreviewView:
+		// Handle special keys for data preview
+		if msg, ok := msg.(tea.KeyMsg); ok {
+			switch msg.String() {
+			case "r":
+				// Reload data preview
+				m.isLoadingPreview = true
+				return m, m.loadDataPreview()
+			}
+		}
 		m.dataPreviewTable, cmd = m.dataPreviewTable.Update(msg)
 	case indexesView:
 		// Handle Enter key for index detail view
@@ -1940,7 +1949,7 @@ func (m model) dataPreviewView() string {
 		content += helpStyle.Render("Loading data preview...")
 	}
 
-	content += "\n\n" + helpStyle.Render("↑/↓: navigate rows • "+keyStyle.Render("enter")+": view row details • "+keyStyle.Render("Ctrl+E")+": export CSV • "+keyStyle.Render("Ctrl+J")+": export JSON • esc: back to tables")
+	content += "\n\n" + helpStyle.Render("↑/↓: navigate rows • "+keyStyle.Render("enter")+": view row details • "+keyStyle.Render("r")+": reload • "+keyStyle.Render("Ctrl+E")+": export CSV • "+keyStyle.Render("Ctrl+J")+": export JSON • esc: back to tables")
 	return docStyle.Render(content)
 }
 
@@ -2344,7 +2353,7 @@ func (m model) fullRowDataView() string {
 
 // fieldDetailView displays a single field's complete content with scrolling
 func (m model) fieldDetailView() string {
-	if m.selectedFieldName == "" || m.selectedFieldValue == "" {
+	if m.selectedFieldName == "" {
 		return "No field data available\n\nesc: back to row details"
 	}
 
@@ -2353,8 +2362,17 @@ func (m model) fieldDetailView() string {
 
 	// Content statistics and position
 	valueLength := len(m.selectedFieldValue)
-	lines := strings.Split(m.selectedFieldValue, "\n")
-	lineCount := len(lines)
+
+	// Handle empty fields
+	var lines []string
+	var lineCount int
+	if m.selectedFieldValue == "" {
+		lines = []string{"(empty)"}
+		lineCount = 1
+	} else {
+		lines = strings.Split(m.selectedFieldValue, "\n")
+		lineCount = len(lines)
+	}
 
 	// Get max line length for horizontal scrolling
 	maxLineLength := 0
@@ -2370,6 +2388,9 @@ func (m model) fieldDetailView() string {
 	if lineCount == 1 {
 		// Single line - apply horizontal scrolling
 		content := m.selectedFieldValue
+		if content == "" {
+			content = "(empty)"
+		}
 		if len(content) > m.fieldDetailCharsPerLine {
 			startChar := m.fieldDetailHorizontalOffset
 			endChar := startChar + m.fieldDetailCharsPerLine
@@ -2421,7 +2442,9 @@ func (m model) fieldDetailView() string {
 	var statusParts []string
 
 	// Size
-	if valueLength > 1024*1024 {
+	if valueLength == 0 {
+		statusParts = append(statusParts, "empty")
+	} else if valueLength > 1024*1024 {
 		statusParts = append(statusParts, fmt.Sprintf("%.1fMB", float64(valueLength)/(1024*1024)))
 	} else if valueLength > 1024 {
 		statusParts = append(statusParts, fmt.Sprintf("%.1fKB", float64(valueLength)/1024))
@@ -3011,7 +3034,7 @@ func (m model) updateFieldValue(fieldName, newValue string, exitEdit bool) tea.C
 		// Find the primary key column (usually 'id')
 		var pkColumnName string
 		var pkValue string
-		
+
 		for i, col := range columns {
 			columnName := col.Title
 			if columnName == "id" || columnName == "uuid" || columnName == "pk" {
@@ -3046,12 +3069,12 @@ func (m model) updateFieldValue(fieldName, newValue string, exitEdit bool) tea.C
 			args = []interface{}{newValue, pkValue}
 
 		case "mysql":
-			query = fmt.Sprintf("UPDATE `%s` SET `%s` = ? WHERE `%s` = ?", 
+			query = fmt.Sprintf("UPDATE `%s` SET `%s` = ? WHERE `%s` = ?",
 				m.selectedTable, fieldName, pkColumnName)
 			args = []interface{}{newValue, pkValue}
 
 		case "sqlite3":
-			query = fmt.Sprintf("UPDATE `%s` SET `%s` = ? WHERE `%s` = ?", 
+			query = fmt.Sprintf("UPDATE `%s` SET `%s` = ? WHERE `%s` = ?",
 				m.selectedTable, fieldName, pkColumnName)
 			args = []interface{}{newValue, pkValue}
 		}
