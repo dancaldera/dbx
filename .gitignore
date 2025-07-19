@@ -20,6 +20,7 @@ go.work
 # Built application binary
 dbx
 main
+bin/
 
 # Environment variables and config files
 .env

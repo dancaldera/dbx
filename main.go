@@ -187,6 +187,8 @@ const (
 	dataPreviewView
 	rowDetailView
 	fieldDetailView
+	indexesView
+	indexDetailView
 )
 
 // Saved connection
@@ -253,6 +255,7 @@ type model struct {
 	columnsTable         table.Model
 	queryResultsTable    table.Model
 	dataPreviewTable     table.Model
+	indexesTable         table.Model
 	selectedDB           dbType
 	connectionStr        string
 	db                   *sql.DB
@@ -317,6 +320,11 @@ type model struct {
 	fieldDetailHorizontalOffset int
 	fieldDetailLinesPerPage     int
 	fieldDetailCharsPerLine     int
+	// Index detail view
+	selectedIndexName       string
+	selectedIndexType       string
+	selectedIndexColumns    string
+	selectedIndexDefinition string
 }
 
 func initialModel() model {
@@ -426,6 +434,19 @@ func initialModel() model {
 	)
 	dataPreviewTable.SetStyles(getMagentaTableStyles())
 
+	// Indexes table
+	indexesTable := table.New(
+		table.WithColumns([]table.Column{
+			{Title: "Index Name", Width: 20},
+			{Title: "Type", Width: 12},
+			{Title: "Columns", Width: 25},
+			{Title: "Definition", Width: 40},
+		}),
+		table.WithFocused(true),
+		table.WithHeight(10),
+	)
+	indexesTable.SetStyles(getMagentaTableStyles())
+
 	// Initialize spinner
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -457,6 +478,7 @@ func initialModel() model {
 		columnsTable:            t,
 		queryResultsTable:       queryResultsTable,
 		dataPreviewTable:        dataPreviewTable,
+		indexesTable:            indexesTable,
 		queryHistoryList:        queryHistoryList,
 		schemasList:             schemasList,
 		selectedSchema:          "public", // Default to public schema for PostgreSQL
@@ -496,6 +518,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleQueryResult(msg)
 	case dataPreviewResult:
 		return m.handleDataPreviewResult(msg)
+	case indexesResult:
+		return m.handleIndexesResult(msg)
 	case exportResult:
 		return m.handleExportResult(msg)
 	case testAndSaveResult:
@@ -621,6 +645,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = dataPreviewView
 			case fieldDetailView:
 				m.state = rowDetailView
+			case indexesView:
+				m.state = columnsView
+			case indexDetailView:
+				m.state = indexesView
 			case queryHistoryView:
 				m.state = queryView
 			}
@@ -775,6 +803,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.err = nil
 					return m, m.loadDataPreview()
 				}
+			}
+
+		case "i":
+			// Show indexes and constraints view from columns view
+			if m.state == columnsView && m.db != nil && m.selectedTable != "" && !m.isSearchingColumns {
+				m.state = indexesView
+				return m, m.loadIndexes()
 			}
 
 		case "e":
@@ -1135,6 +1170,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.queryHistoryList, cmd = m.queryHistoryList.Update(msg)
 	case dataPreviewView:
 		m.dataPreviewTable, cmd = m.dataPreviewTable.Update(msg)
+	case indexesView:
+		// Handle Enter key for index detail view
+		if msg, ok := msg.(tea.KeyMsg); ok {
+			switch msg.String() {
+			case "enter":
+				// Get selected index/constraint details
+				if selectedRow := m.indexesTable.SelectedRow(); len(selectedRow) >= 4 {
+					m.selectedIndexName = selectedRow[0]
+					m.selectedIndexType = selectedRow[1]
+					m.selectedIndexColumns = selectedRow[2]
+					m.selectedIndexDefinition = selectedRow[3]
+					m.state = indexDetailView
+					return m, nil
+				}
+			}
+		}
+		m.indexesTable, cmd = m.indexesTable.Update(msg)
 	case rowDetailView:
 		// Handle pagination and navigation keys for row detail view
 		if msg, ok := msg.(tea.KeyMsg); ok {
@@ -1364,6 +1416,10 @@ func (m model) View() string {
 		return m.rowDetailView()
 	case fieldDetailView:
 		return m.fieldDetailView()
+	case indexesView:
+		return m.indexesView()
+	case indexDetailView:
+		return m.indexDetailView()
 	}
 	return ""
 }
@@ -1668,12 +1724,67 @@ func (m model) columnsView() string {
 		helpText = helpStyle.Render(
 			keyStyle.Render("↑/↓") + ": navigate • " +
 				keyStyle.Render("r") + ": run query • " +
+				keyStyle.Render("i") + ": indexes & constraints • " +
 				keyStyle.Render("Ctrl+F") + ": search • " +
 				keyStyle.Render("s") + ": save connection • " +
 				keyStyle.Render("esc") + ": back to tables")
 	}
 
 	content += "\n" + helpText
+	return docStyle.Render(content)
+}
+
+func (m model) indexesView() string {
+	content := titleStyle.Render(fmt.Sprintf("🔑 Indexes & Constraints: %s", m.selectedTable)) + "\n\n"
+
+	if m.err != nil {
+		content += errorStyle.Render("❌ "+m.err.Error()) + "\n\n"
+	}
+
+	// Show the indexes table
+	content += m.indexesTable.View() + "\n\n"
+
+	// Help text
+	helpText := helpStyle.Render(
+		keyStyle.Render("↑/↓") + ": navigate • " +
+			keyStyle.Render("enter") + ": view details • " +
+			keyStyle.Render("esc") + ": back to columns")
+
+	content += "\n" + helpText
+	return docStyle.Render(content)
+}
+
+func (m model) indexDetailView() string {
+	if m.selectedIndexName == "" {
+		return "No index data available\n\nesc: back to indexes"
+	}
+
+	// Title with icon based on type
+	icon := "🔑"
+	if m.selectedIndexType == "PRIMARY" {
+		icon = "🗝️"
+	} else if m.selectedIndexType == "UNIQUE" {
+		icon = "✨"
+	} else if strings.Contains(m.selectedIndexType, "FOREIGN") {
+		icon = "🔗"
+	}
+
+	title := titleStyle.Render(fmt.Sprintf("%s Index/Constraint Details", icon))
+	content := title + "\n\n"
+
+	// Plain text styling with colors but no borders or boxes
+	labelStyle := lipgloss.NewStyle().Foreground(darkMagenta).Bold(true)
+	valueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FAFAFA"))
+
+	// Simple, clean layout with plain text
+	content += labelStyle.Render("Name: ") + valueStyle.Render(m.selectedIndexName) + "\n"
+	content += labelStyle.Render("Type: ") + valueStyle.Render(m.selectedIndexType) + "\n"
+	content += labelStyle.Render("Columns: ") + valueStyle.Render(m.selectedIndexColumns) + "\n"
+	content += labelStyle.Render("Definition: ") + valueStyle.Render(m.selectedIndexDefinition) + "\n\n"
+
+	// Simple help text without boxes
+	content += labelStyle.Render("esc") + ": back to indexes"
+	
 	return docStyle.Render(content)
 }
 
@@ -2570,6 +2681,51 @@ func (m model) loadDataPreview() tea.Cmd {
 	}
 }
 
+// Command to load indexes for a table
+func (m model) loadIndexes() tea.Cmd {
+	return func() tea.Msg {
+		// Get indexes
+		indexes, indexErr := getIndexes(m.db, m.selectedDB.driver, m.selectedTable, m.selectedSchema)
+
+		// Get constraints
+		constraints, constraintErr := getConstraints(m.db, m.selectedDB.driver, m.selectedTable, m.selectedSchema)
+
+		// Combine both into a single result
+		var combinedRows [][]string
+
+		// Add indexes first
+		if indexErr == nil {
+			for _, index := range indexes {
+				combinedRows = append(combinedRows, index)
+			}
+		}
+
+		// Add constraints
+		if constraintErr == nil {
+			for _, constraint := range constraints {
+				// Format constraint as index-like row: name, type, columns, definition
+				name := constraint[0]
+				constraintType := constraint[1]
+				column := constraint[2]
+				referenced := constraint[3]
+
+				definition := fmt.Sprintf("CONSTRAINT %s", constraintType)
+				if referenced != "" {
+					definition += fmt.Sprintf(" REFERENCES %s", referenced)
+				}
+
+				combinedRows = append(combinedRows, []string{name, constraintType, column, definition})
+			}
+		}
+
+		// Return combined result
+		return indexesResult{
+			indexes: combinedRows,
+			err:     indexErr, // Return index error if it exists, otherwise constraint error
+		}
+	}
+}
+
 // Command to execute query
 func (m model) executeQuery(query string) tea.Cmd {
 	return func() tea.Msg {
@@ -2655,6 +2811,11 @@ type queryResult struct {
 type dataPreviewResult struct {
 	columns []string
 	rows    [][]string
+	err     error
+}
+
+type indexesResult struct {
+	indexes [][]string
 	err     error
 }
 
@@ -3060,6 +3221,29 @@ func (m model) handleDataPreviewResult(msg dataPreviewResult) (model, tea.Cmd) {
 		table.WithHeight(10),
 	)
 	m.dataPreviewTable.SetStyles(getMagentaTableStyles())
+
+	return m, nil
+}
+
+func (m model) handleIndexesResult(msg indexesResult) (model, tea.Cmd) {
+	if msg.err != nil {
+		return m.handleErrorWithRecovery(msg.err, 3)
+	}
+
+	m.err = nil
+	m.state = indexesView
+
+	// Create rows for the indexes table
+	rows := make([]table.Row, 0)
+	for _, indexRow := range msg.indexes {
+		if len(indexRow) >= 4 {
+			rows = append(rows, table.Row(indexRow))
+		}
+	}
+
+	// Update the indexes table
+	m.indexesTable.SetRows(rows)
+	m.indexesTable.Focus()
 
 	return m, nil
 }
@@ -3565,6 +3749,201 @@ func getColumns(db *sql.DB, driver, tableName, schema string) ([][]string, error
 	}
 
 	return columns, nil
+}
+
+func getIndexes(db *sql.DB, driver, tableName, schema string) ([][]string, error) {
+	var query string
+	switch driver {
+	case "postgres":
+		query = `SELECT 
+					i.indexname as index_name,
+					i.indexdef as index_definition,
+					CASE 
+						WHEN i.indexdef LIKE '%UNIQUE%' THEN 'UNIQUE'
+						WHEN i.indexdef LIKE '%PRIMARY%' THEN 'PRIMARY'
+						ELSE 'INDEX'
+					END as index_type,
+					pg_get_indexdef(pg_class.oid) as columns
+				FROM pg_indexes i
+				JOIN pg_class ON pg_class.relname = i.indexname
+				WHERE i.tablename = $1 AND i.schemaname = $2
+				ORDER BY i.indexname`
+	case "mysql":
+		query = `SELECT 
+					INDEX_NAME as index_name,
+					CONCAT('INDEX ON ', COLUMN_NAME) as index_definition,
+					CASE 
+						WHEN NON_UNIQUE = 0 AND INDEX_NAME = 'PRIMARY' THEN 'PRIMARY'
+						WHEN NON_UNIQUE = 0 THEN 'UNIQUE'
+						ELSE 'INDEX'
+					END as index_type,
+					GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) as columns
+				FROM INFORMATION_SCHEMA.STATISTICS 
+				WHERE TABLE_NAME = ? AND TABLE_SCHEMA = DATABASE()
+				GROUP BY INDEX_NAME, NON_UNIQUE
+				ORDER BY INDEX_NAME`
+	case "sqlite3":
+		query = fmt.Sprintf("PRAGMA index_list(%s)", tableName)
+	}
+
+	var rows *sql.Rows
+	var err error
+
+	switch driver {
+	case "postgres":
+		rows, err = db.Query(query, tableName, schema)
+	case "mysql":
+		rows, err = db.Query(query, tableName)
+	case "sqlite3":
+		rows, err = db.Query(query)
+	default:
+		rows, err = db.Query(query, tableName)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var indexes [][]string
+	for rows.Next() {
+		if driver == "sqlite3" {
+			var seq int
+			var name string
+			var unique int
+			var origin, partial string
+
+			err := rows.Scan(&seq, &name, &unique, &origin, &partial)
+			if err != nil {
+				return nil, err
+			}
+
+			indexType := "INDEX"
+			if unique == 1 {
+				indexType = "UNIQUE"
+			}
+
+			// Get columns for this index
+			indexInfoQuery := fmt.Sprintf("PRAGMA index_info(%s)", name)
+			indexInfoRows, err := db.Query(indexInfoQuery)
+			if err != nil {
+				continue
+			}
+
+			var columns []string
+			for indexInfoRows.Next() {
+				var seqno, cid int
+				var colName string
+				if err := indexInfoRows.Scan(&seqno, &cid, &colName); err == nil {
+					columns = append(columns, colName)
+				}
+			}
+			indexInfoRows.Close()
+
+			columnsStr := strings.Join(columns, ", ")
+			definition := fmt.Sprintf("INDEX ON (%s)", columnsStr)
+
+			indexes = append(indexes, []string{name, definition, indexType, columnsStr})
+		} else {
+			var name, definition, indexType, columns string
+
+			err := rows.Scan(&name, &definition, &indexType, &columns)
+			if err != nil {
+				return nil, err
+			}
+
+			indexes = append(indexes, []string{name, definition, indexType, columns})
+		}
+	}
+
+	return indexes, nil
+}
+
+func getConstraints(db *sql.DB, driver, tableName, schema string) ([][]string, error) {
+	var query string
+	switch driver {
+	case "postgres":
+		query = `SELECT 
+					tc.constraint_name,
+					tc.constraint_type,
+					kcu.column_name,
+					COALESCE(ccu.table_name || '.' || ccu.column_name, '') as referenced_table_column
+				FROM information_schema.table_constraints tc
+				LEFT JOIN information_schema.key_column_usage kcu 
+					ON tc.constraint_name = kcu.constraint_name 
+					AND tc.table_schema = kcu.table_schema
+				LEFT JOIN information_schema.constraint_column_usage ccu
+					ON tc.constraint_name = ccu.constraint_name
+					AND tc.table_schema = ccu.table_schema
+				WHERE tc.table_name = $1 AND tc.table_schema = $2
+				ORDER BY tc.constraint_name, kcu.ordinal_position`
+	case "mysql":
+		query = `SELECT 
+					CONSTRAINT_NAME as constraint_name,
+					CONSTRAINT_TYPE as constraint_type,
+					COLUMN_NAME as column_name,
+					COALESCE(CONCAT(REFERENCED_TABLE_NAME, '.', REFERENCED_COLUMN_NAME), '') as referenced_table_column
+				FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+				JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc 
+					ON kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME 
+					AND kcu.TABLE_SCHEMA = tc.TABLE_SCHEMA
+				WHERE kcu.TABLE_NAME = ? AND kcu.TABLE_SCHEMA = DATABASE()
+				ORDER BY kcu.CONSTRAINT_NAME, kcu.ORDINAL_POSITION`
+	case "sqlite3":
+		query = fmt.Sprintf("PRAGMA foreign_key_list(%s)", tableName)
+	}
+
+	var rows *sql.Rows
+	var err error
+
+	switch driver {
+	case "postgres":
+		rows, err = db.Query(query, tableName, schema)
+	case "mysql":
+		rows, err = db.Query(query, tableName)
+	case "sqlite3":
+		rows, err = db.Query(query)
+	default:
+		rows, err = db.Query(query, tableName)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var constraints [][]string
+	if driver == "sqlite3" {
+		// Handle SQLite foreign keys
+		for rows.Next() {
+			var id, seq int
+			var table, from, to, onUpdate, onDelete, match string
+
+			err := rows.Scan(&id, &seq, &table, &from, &to, &onUpdate, &onDelete, &match)
+			if err != nil {
+				return nil, err
+			}
+
+			constraintName := fmt.Sprintf("fk_%s_%s", tableName, from)
+			constraintType := "FOREIGN KEY"
+			referencedTableColumn := fmt.Sprintf("%s.%s", table, to)
+
+			constraints = append(constraints, []string{constraintName, constraintType, from, referencedTableColumn})
+		}
+	} else {
+		for rows.Next() {
+			var name, constraintType, column, referencedTableColumn string
+
+			err := rows.Scan(&name, &constraintType, &column, &referencedTableColumn)
+			if err != nil {
+				return nil, err
+			}
+
+			constraints = append(constraints, []string{name, constraintType, column, referencedTableColumn})
+		}
+	}
+
+	return constraints, nil
 }
 
 // Method to update saved connections list

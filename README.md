@@ -37,6 +37,7 @@ Run the application:
 - **Esc**: Go back to previous screen
 - **p**: Preview table data (first 10 rows)
 - **r**: Run custom SQL query
+- **i**: View indexes and constraints (from columns view)
 - **Ctrl+F** or **/**: Search tables (in tables view) or columns (in columns view)
 - **Ctrl+H**: Access query history (in query view)
 - **d**: Delete saved connection (in saved connections view) or query history entry (in query history view)
@@ -129,6 +130,33 @@ DBX supports exporting query results and table previews to multiple formats:
 - Query results: `query_result_YYYYMMDD_HHMMSS.csv/json`
 - Table previews: `tablename_YYYYMMDD_HHMMSS.csv/json`
 
+## Index and Constraint Information
+
+DBX provides comprehensive index and constraint information for all supported database types:
+
+### Index and Constraint Features
+- **Index Display**: Shows all indexes on a table including primary keys, unique indexes, and regular indexes
+- **Constraint Information**: Displays table constraints including foreign keys, primary keys, and check constraints
+- **Cross-Database Support**: Works with PostgreSQL, MySQL, and SQLite databases
+- **Visual Organization**: Displays index type, affected columns, and full definition
+
+### Index and Constraint Workflow
+1. **Navigate to Columns**: Select a table and view its column structure
+2. **Access Index View**: Press `i` to view indexes and constraints for the current table
+3. **Review Information**: Browse through all indexes and constraints with their details
+4. **Navigate Back**: Press `Esc` to return to the columns view
+
+### Supported Information
+- **PostgreSQL**: Full index and constraint support including schema-aware queries
+- **MySQL**: Index statistics and constraint information from information_schema
+- **SQLite**: Pragma-based index information and foreign key constraints
+
+### Index Display Columns
+- **Index Name**: The name of the index or constraint
+- **Type**: Index type (PRIMARY, UNIQUE, INDEX) or constraint type (FOREIGN KEY, etc.)
+- **Columns**: Which table columns are affected by the index or constraint
+- **Definition**: Full SQL definition or description of the index or constraint
+
 ## Connection Validation
 
 DBX includes comprehensive connection validation to ensure reliable database connections:
@@ -195,7 +223,7 @@ go vet ./...
 ### Enhanced Database Support
 - [x] 10. Database schema support - Handle multiple schemas in PostgreSQL
 - [x] 11. View support - Browse and explore database views
-- [ ] 12. Index information - Display table indexes and constraints
+- [x] 12. Index information - Display table indexes and constraints
 - [ ] 13. Foreign key relationships - Show table relationships
 - [ ] 14. Stored procedures - List and describe stored procedures/functions
 - [ ] 15. SSL/TLS support - Secure connections with certificate validation
