@@ -38,6 +38,7 @@ Run the application:
 - **p**: Preview table data (first 10 rows)
 - **r**: Run custom SQL query
 - **i**: View indexes and constraints (from columns view)
+- **f**: View foreign key relationships (from tables view)
 - **Ctrl+F** or **/**: Search tables (in tables view) or columns (in columns view)
 - **Ctrl+H**: Access query history (in query view)
 - **d**: Delete saved connection (in saved connections view) or query history entry (in query history view)
@@ -157,6 +158,34 @@ DBX provides comprehensive index and constraint information for all supported da
 - **Columns**: Which table columns are affected by the index or constraint
 - **Definition**: Full SQL definition or description of the index or constraint
 
+## Foreign Key Relationships
+
+DBX provides comprehensive foreign key relationship visualization across all supported database types:
+
+### Foreign Key Features
+- **Relationship Display**: Shows all foreign key relationships between tables in the database
+- **Cross-Database Support**: Works with PostgreSQL, MySQL, and SQLite databases
+- **Comprehensive Information**: Displays source table, source column, target table, target column, and constraint name
+- **Easy Navigation**: Access from tables view to see all database relationships at once
+
+### Foreign Key Workflow
+1. **Navigate to Tables**: Connect to a database and view the tables listing
+2. **Access Relationships**: Press `f` to view all foreign key relationships in the database
+3. **Review Relationships**: Browse through all foreign key constraints with their details
+4. **Navigate Back**: Press `Esc` to return to the tables view
+
+### Supported Databases
+- **PostgreSQL**: Full foreign key support using information_schema queries
+- **MySQL**: Foreign key relationships from INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+- **SQLite**: Foreign key information using PRAGMA foreign_key_list for each table
+
+### Relationship Display Columns
+- **From Table**: The table that contains the foreign key
+- **From Column**: The column in the source table that references another table
+- **To Table**: The table being referenced by the foreign key
+- **To Column**: The column in the target table being referenced
+- **Constraint Name**: The name of the foreign key constraint
+
 ## Connection Validation
 
 DBX includes comprehensive connection validation to ensure reliable database connections:
@@ -224,7 +253,7 @@ go vet ./...
 - [x] 10. Database schema support - Handle multiple schemas in PostgreSQL
 - [x] 11. View support - Browse and explore database views
 - [x] 12. Index information - Display table indexes and constraints
-- [ ] 13. Foreign key relationships - Show table relationships
+- [x] 13. Foreign key relationships - Show table relationships
 - [ ] 14. Stored procedures - List and describe stored procedures/functions
 - [ ] 15. SSL/TLS support - Secure connections with certificate validation
 
