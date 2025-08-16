@@ -28,11 +28,11 @@ var (
             Margin(0, 0, 1, 0).
             Bold(true)
 
-    // List header title style (tight spacing)
+    // List header title style (looser spacing)
     ListTitleStyle = lipgloss.NewStyle().
             Foreground(PrimaryMagenta).
             Padding(0, 1).
-            Margin(0).
+            Margin(0, 0, 1, 0).
             Bold(true)
 
 	// Subtitle for sections
