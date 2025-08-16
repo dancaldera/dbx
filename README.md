@@ -2,6 +2,16 @@
 
 A terminal-based database explorer built with Go and Bubble Tea. DBX provides an interactive TUI for connecting to and exploring database structures across multiple database types.
 
+## Architecture
+
+DBX has been refactored from a monolithic structure into a clean, modular architecture with well-separated concerns:
+
+- **Configuration Management**: Persistent storage for connections and query history
+- **Database Operations**: Abstracted database interactions with support for PostgreSQL, MySQL, and SQLite
+- **Models & Types**: Clean type definitions and data structures
+- **UI Styling**: Consistent theming and visual design
+- **Modular Components**: Reusable and testable code organization
+
 ## Features
 
 - **Multi-database support**: PostgreSQL, MySQL, and SQLite

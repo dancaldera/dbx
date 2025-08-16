@@ -8,9 +8,37 @@ This is **DBX**, a terminal-based database explorer built in Go. It's a TUI (Ter
 
 ## Architecture
 
+### Modular Architecture
+
+The application has been refactored from a single-file monolith into a well-organized modular structure:
+
+```
+dbx/
+├── main.go                     # Main application entry point
+├── cmd/dbx/                    # Command-line application (alternative)
+├── internal/
+│   ├── config/                 # Configuration and file storage
+│   │   └── storage.go          # Connection and history persistence
+│   ├── database/               # Database operations
+│   │   ├── operations.go       # Core database functions
+│   │   └── columns.go          # Column, index, and relationship queries
+│   ├── models/                 # Data models and types
+│   │   ├── types.go            # Core type definitions
+│   │   └── model.go            # Bubble Tea model interface
+│   ├── styles/                 # UI theming and styles
+│   │   └── theme.go            # Magenta theme definitions
+│   ├── ui/                     # UI initialization
+│   │   └── init.go             # Model initialization
+│   └── handlers/               # Event handlers (optional)
+│       └── update.go           # Update logic handlers
+├── go.mod
+└── go.sum
+```
+
 ### Core Components
 
-- **Single-file application** (`main.go`) using the Bubble Tea framework for TUI
+- **Modular design** with clear separation of concerns
+- **Package-based organization** for maintainability and testing
 - **State machine pattern** with main view states:
   - `dbTypeView`: Database type selection screen
   - `connectionView`: Connection string input screen
@@ -19,6 +47,15 @@ This is **DBX**, a terminal-based database explorer built in Go. It's a TUI (Ter
   - `columnsView`: Show column details for selected table
   - `queryView`: SQL query execution interface
   - `queryHistoryView`: Browse and reuse previous queries
+
+### Package Responsibilities
+
+- **`main.go`**: Application entry point and Bubble Tea event loop
+- **`internal/config`**: Configuration file management, connection/history persistence
+- **`internal/database`**: All database operations, queries, and connection management
+- **`internal/models`**: Type definitions, data structures, and interfaces
+- **`internal/styles`**: UI theming, colors, and styling definitions
+- **`internal/ui`**: UI component initialization and setup
 
 ### Key Dependencies
 
