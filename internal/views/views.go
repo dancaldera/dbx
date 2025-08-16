@@ -212,7 +212,6 @@ func TablesView(m models.Model) string {
         styles.KeyStyle.Render("enter") + ": preview data • " +
             styles.KeyStyle.Render("v") + ": view columns • " +
             styles.KeyStyle.Render("f") + ": relationships • " +
-            styles.KeyStyle.Render("s") + ": save connection • " +
             styles.KeyStyle.Render("esc") + ": disconnect")
 
 	return styles.DocStyle.Render(content + "\n" + helpText)
