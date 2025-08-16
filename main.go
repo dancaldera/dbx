@@ -58,9 +58,13 @@ func initialModel() models.Model {
 	queryHistory, _ := config.LoadQueryHistory()
 
 	// Saved connections list
-	savedConnectionsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
-	savedConnectionsList.Title = "💾 Saved Connections"
-	savedConnectionsList.SetShowStatusBar(false)
+    savedConnectionsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
+    savedConnectionsList.Title = "💾 Saved Connections"
+    scLS := list.DefaultStyles()
+    scLS.Title = styles.TitleStyle
+    scLS.TitleBar = lipgloss.NewStyle()
+    savedConnectionsList.SetStyles(scLS)
+    savedConnectionsList.SetShowStatusBar(false)
 	savedConnectionsList.SetFilteringEnabled(false)
 	savedConnectionsList.SetShowHelp(false)
 
@@ -104,9 +108,13 @@ func initialModel() models.Model {
 	si.Width = 80
 
 	// Tables list
-	tablesList := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
-	tablesList.Title = "📊 Available Tables"
-	tablesList.SetShowStatusBar(false)
+    tablesList := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
+    tablesList.Title = "📊 Available Tables"
+    tblLS := list.DefaultStyles()
+    tblLS.Title = styles.TitleStyle
+    tblLS.TitleBar = lipgloss.NewStyle()
+    tablesList.SetStyles(tblLS)
+    tablesList.SetShowStatusBar(false)
 	tablesList.SetFilteringEnabled(false)
 	tablesList.SetShowHelp(false)
 
