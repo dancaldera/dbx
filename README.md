@@ -288,6 +288,17 @@ go vet ./...
 - [ ] 29. Themes support - Multiple color schemes and styling options
 - [ ] 30. Cloud database support - AWS RDS, Google Cloud SQL, etc.
 
+## Code Quality Standards
+
+### File Size Limit
+- **All source files must be less than 500 lines** to maintain code readability and modularity across time
+- If a file approaches 500 lines, consider refactoring into smaller, focused modules
+- This helps ensure:
+  - Better code maintainability
+  - Easier code reviews
+  - Improved testability
+  - Clear separation of concerns
+
 ## License
 
 This project is licensed under the MIT License - see the [MIT License](https://opensource.org/licenses/MIT) for details.

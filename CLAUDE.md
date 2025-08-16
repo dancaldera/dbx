@@ -29,6 +29,8 @@ dbx/
 │   │   └── theme.go            # Magenta theme definitions
 │   ├── ui/                     # UI initialization
 │   │   └── init.go             # Model initialization
+│   ├── views/                  # UI view rendering
+│   │   └── views.go            # All view rendering functions
 │   └── handlers/               # Event handlers (optional)
 │       └── update.go           # Update logic handlers
 ├── go.mod
@@ -153,3 +155,15 @@ None currently. The application builds and runs successfully.
 - `Ctrl+E`: Export query results or table preview to CSV
 - `Ctrl+J`: Export query results or table preview to JSON
 - `q` or `Ctrl+C`: Quit application
+
+## Code Quality Standards
+
+### File Size Limit
+- **All source files must be less than 500 lines** to maintain code readability and modularity across time
+- If a file approaches 500 lines, consider refactoring into smaller, focused modules
+- This helps ensure:
+  - Better code maintainability
+  - Easier code reviews
+  - Improved testability
+  - Clear separation of concerns
+- When refactoring large files, preserve functionality and follow the existing modular architecture patterns

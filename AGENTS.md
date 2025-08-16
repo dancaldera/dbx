@@ -8,8 +8,9 @@
   - `handlers/` (update logic)
   - `models/` (core types and state)
   - `styles/` (theme/styling)
-  - `ui/` (Bubble Tea models, views)
-- Root `main.go`: legacy entry; keep changes minimal here.
+  - `ui/` (Bubble Tea models initialization)
+  - `views/` (UI view rendering functions)
+- Root `main.go`: current main entry point with application logic
 
 ## Build, Test, and Development
 - Install deps: `go mod tidy`
@@ -43,4 +44,16 @@
 - Do not commit credentials or real connection strings; use placeholders.
 - Avoid committing build artifacts (e.g., `dbx`). Add to `.gitignore` if needed.
 - Prefer environment variables or local config for sensitive values during development.
+
+## Code Quality Standards
+
+### File Size Limit
+- **All source files must be less than 500 lines** to maintain code readability and modularity across time
+- If a file approaches 500 lines, consider refactoring into smaller, focused modules
+- This helps ensure:
+  - Better code maintainability
+  - Easier code reviews
+  - Improved testability
+  - Clear separation of concerns
+- When refactoring large files, preserve functionality and follow the existing modular architecture patterns
 

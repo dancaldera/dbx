@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
@@ -21,6 +20,7 @@ import (
 	"github.com/danielcaldera/dbx/internal/database"
 	"github.com/danielcaldera/dbx/internal/models"
 	"github.com/danielcaldera/dbx/internal/styles"
+	"github.com/danielcaldera/dbx/internal/views"
 )
 
 // Database types
@@ -383,17 +383,17 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m appModel) View() string {
 	switch m.State {
 	case models.DBTypeView:
-		return dbTypeView(m)
+		return views.DBTypeView(m.Model)
 	case models.SavedConnectionsView:
-		return savedConnectionsView(m)
+		return views.SavedConnectionsView(m.Model)
 	case models.ConnectionView:
-		return connectionView(m)
+		return views.ConnectionView(m.Model)
 	case models.SaveConnectionView:
-		return saveConnectionView(m)
+		return views.SaveConnectionView(m.Model)
 	case models.TablesView:
-		return tablesView(m)
+		return views.TablesView(m.Model)
 	case models.ColumnsView:
-		return columnsView(m)
+		return views.ColumnsView(m.Model)
 	default:
 		return "View not implemented yet"
 	}
@@ -525,172 +525,7 @@ func handleColumnsResult(m appModel, msg models.ColumnsResult) (appModel, tea.Cm
 	return m, nil
 }
 
-// View functions
-
-func dbTypeView(m appModel) string {
-	content := m.DBTypeList.View()
-
-	helpText := styles.HelpStyle.Render(
-		styles.KeyStyle.Render("enter") + ": select • " +
-			styles.KeyStyle.Render("s") + ": saved connections • " +
-			styles.KeyStyle.Render("q") + ": quit",
-	)
-
-	return styles.DocStyle.Render(content + "\n" + helpText)
-}
-
-func savedConnectionsView(m appModel) string {
-	var content string
-
-	if m.IsConnecting {
-		loadingMsg := "⏳ Connecting to saved connection..."
-		content = m.SavedConnectionsList.View() + "\n" + loadingMsg
-	} else if len(m.SavedConnections) == 0 {
-		emptyMsg := styles.InfoStyle.Render("📝 No saved connections yet.\n\nGo back and create your first connection!")
-		content = m.SavedConnectionsList.View() + "\n" + emptyMsg
-	} else {
-		content = m.SavedConnectionsList.View()
-	}
-
-	helpText := styles.HelpStyle.Render(
-		styles.KeyStyle.Render("enter") + ": connect • " +
-			styles.KeyStyle.Render("esc") + ": back",
-	)
-
-	return styles.DocStyle.Render(content + "\n" + helpText)
-}
-
-func connectionView(m appModel) string {
-	var dbIcon string
-	switch m.SelectedDB.Driver {
-	case "postgres":
-		dbIcon = "🐘"
-	case "mysql":
-		dbIcon = "🐬"
-	case "sqlite3":
-		dbIcon = "📁"
-	default:
-		dbIcon = "🗄️"
-	}
-
-	title := styles.TitleStyle.Render(fmt.Sprintf("%s  Connect to %s", dbIcon, m.SelectedDB.Name))
-
-	var messageContent string
-	if m.IsTestingConnection {
-		messageContent = "⏳ Testing connection..."
-	} else if m.IsConnecting {
-		messageContent = "⏳ Connecting to database..."
-	} else if m.Err != nil {
-		messageContent = styles.ErrorStyle.Render("❌ " + m.Err.Error())
-	} else if m.QueryResult != "" {
-		messageContent = styles.SuccessStyle.Render(m.QueryResult)
-	}
-
-	nameLabel := styles.SubtitleStyle.Render("Connection Name:")
-	var nameField string
-	if m.NameInput.Focused() {
-		nameField = styles.InputFocusedStyle.Render(m.NameInput.View())
-	} else {
-		nameField = styles.InputStyle.Render(m.NameInput.View())
-	}
-
-	connLabel := styles.SubtitleStyle.Render("Connection String:")
-	var connField string
-	if m.TextInput.Focused() {
-		connField = styles.InputFocusedStyle.Render(m.TextInput.View())
-	} else {
-		connField = styles.InputStyle.Render(m.TextInput.View())
-	}
-
-	var exampleText string
-	switch m.SelectedDB.Driver {
-	case "postgres":
-		exampleText = "postgres://user:password@localhost/dbname?sslmode=disable"
-	case "mysql":
-		exampleText = "user:password@tcp(localhost:3306)/dbname"
-	case "sqlite3":
-		exampleText = "./database.db or /path/to/database.db"
-	}
-
-	examples := styles.InfoStyle.Render(
-		styles.SubtitleStyle.Render("Examples:") + "\n" + exampleText,
-	)
-
-	helpText := styles.HelpStyle.Render(
-		styles.KeyStyle.Render("F1") + ": test connection • " +
-			styles.KeyStyle.Render("Tab") + ": switch fields • " +
-			styles.KeyStyle.Render("Esc") + ": back",
-	)
-
-	var elements []string
-	elements = append(elements, title)
-
-	if messageContent != "" {
-		elements = append(elements, messageContent)
-	}
-
-	elements = append(elements,
-		nameLabel,
-		nameField,
-		connLabel,
-		connField,
-		examples,
-		helpText,
-	)
-
-	content := lipgloss.JoinVertical(lipgloss.Left, elements...)
-	return styles.DocStyle.Render(content)
-}
-
-func saveConnectionView(m appModel) string {
-	content := styles.TitleStyle.Render("Save Connection") + "\n\n"
-	content += "Name for this connection:\n"
-	content += m.NameInput.View() + "\n\n"
-	content += "Connection to save:\n"
-	content += styles.HelpStyle.Render(fmt.Sprintf("%s: %s", m.SelectedDB.Name, m.ConnectionStr))
-	content += "\n\n" + styles.HelpStyle.Render("enter: save • esc: cancel")
-	return styles.DocStyle.Render(content)
-}
-
-func tablesView(m appModel) string {
-	var elements []string
-
-	if m.IsLoadingColumns {
-		loadingMsg := "⏳ Loading table columns..."
-		elements = append(elements, m.TablesList.View())
-		elements = append(elements, loadingMsg)
-	} else if len(m.Tables) == 0 {
-		emptyMsg := styles.InfoStyle.Render("📋 No tables found in this database.")
-		elements = append(elements, m.TablesList.View())
-		elements = append(elements, emptyMsg)
-	} else {
-		statusText := styles.SuccessStyle.Render(fmt.Sprintf("✅ Connected successfully (%d tables found)", len(m.Tables)))
-		elements = append(elements, statusText)
-		elements = append(elements, "")
-		elements = append(elements, m.TablesList.View())
-	}
-
-	content := lipgloss.JoinVertical(lipgloss.Left, elements...)
-
-	helpText := styles.HelpStyle.Render(
-		styles.KeyStyle.Render("enter") + ": view columns • " +
-			styles.KeyStyle.Render("s") + ": save connection • " +
-			styles.KeyStyle.Render("esc") + ": disconnect")
-
-	return styles.DocStyle.Render(content + "\n" + helpText)
-}
-
-func columnsView(m appModel) string {
-	content := styles.TitleStyle.Render(fmt.Sprintf("Columns of table: %s", m.SelectedTable)) + "\n\n"
-	content += m.ColumnsTable.View()
-
-	helpText := styles.HelpStyle.Render(
-		styles.KeyStyle.Render("↑/↓") + ": navigate • " +
-			styles.KeyStyle.Render("esc") + ": back to tables")
-
-	content += "\n" + helpText
-	return styles.DocStyle.Render(content)
-}
+// Helper functions
 
 func updateSavedConnectionsList(m appModel) appModel {
 	savedItems := make([]list.Item, len(m.SavedConnections))
