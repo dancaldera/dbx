@@ -209,8 +209,8 @@ func TablesView(m models.Model) string {
 	content := lipgloss.JoinVertical(lipgloss.Left, elements...)
 
     helpText := styles.HelpStyle.Render(
-        styles.KeyStyle.Render("enter") + ": view columns • " +
-            styles.KeyStyle.Render("p") + ": preview data • " +
+        styles.KeyStyle.Render("enter") + ": preview data • " +
+            styles.KeyStyle.Render("v") + ": view columns • " +
             styles.KeyStyle.Render("f") + ": relationships • " +
             styles.KeyStyle.Render("s") + ": save connection • " +
             styles.KeyStyle.Render("esc") + ": disconnect")

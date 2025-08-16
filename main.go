@@ -295,8 +295,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "enter":
-			switch m.State {
+        case "enter":
+            switch m.State {
 			case models.DBTypeView:
 				if i, ok := m.DBTypeList.SelectedItem().(models.Item); ok {
 					for _, db := range dbTypes {
@@ -354,23 +354,33 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
-			case models.TablesView:
-				if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingColumns {
-					m.SelectedTable = i.ItemTitle
-					m.IsLoadingColumns = true
-					m.Err = nil
-					return m, loadColumns(m)
-				}
-			}
-		case "p":
-			if m.State == models.TablesView {
-				if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingPreview {
-					m.SelectedTable = i.ItemTitle
-					m.IsLoadingPreview = true
-					m.Err = nil
-					return m, loadDataPreview(m)
-				}
-			}
+            case models.TablesView:
+                if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingPreview {
+                    m.SelectedTable = i.ItemTitle
+                    m.IsLoadingPreview = true
+                    m.Err = nil
+                    return m, loadDataPreview(m)
+                }
+            }
+        case "p":
+            // Keep "p" as an alias for preview
+            if m.State == models.TablesView {
+                if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingPreview {
+                    m.SelectedTable = i.ItemTitle
+                    m.IsLoadingPreview = true
+                    m.Err = nil
+                    return m, loadDataPreview(m)
+                }
+            }
+        case "v":
+            if m.State == models.TablesView {
+                if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingColumns {
+                    m.SelectedTable = i.ItemTitle
+                    m.IsLoadingColumns = true
+                    m.Err = nil
+                    return m, loadColumns(m)
+                }
+            }
 		case "f":
 			if m.State == models.TablesView && m.DB != nil {
 				return m, loadRelationships(m)
@@ -406,10 +416,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case models.SaveConnectionView:
 		m.NameInput, cmd = m.NameInput.Update(msg)
-	case models.TablesView:
-		m.TablesList, cmd = m.TablesList.Update(msg)
-	case models.DataPreviewView:
-		m.DataPreviewTable, cmd = m.DataPreviewTable.Update(msg)
+    case models.TablesView:
+        m.TablesList, cmd = m.TablesList.Update(msg)
     case models.ColumnsView:
         m.ColumnsTable, cmd = m.ColumnsTable.Update(msg)
     case models.DataPreviewView:
