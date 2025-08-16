@@ -40,8 +40,8 @@ func initialModel() models.Model {
 		}
 	}
 
-	dbList := list.New(items, list.NewDefaultDelegate(), 0, 0)
-	dbList.Title = "🗄️  DBX - Database Explorer"
+    dbList := list.New(items, list.NewDefaultDelegate(), 0, 0)
+    dbList.Title = "🗄️ DBX — Database Explorer"
 	dbList.SetShowStatusBar(false)
 	dbList.SetFilteringEnabled(false)
 	dbList.SetShowHelp(false)
