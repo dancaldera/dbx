@@ -201,12 +201,10 @@ func TablesView(m models.Model) string {
 		emptyMsg := styles.InfoStyle.Render("📋 No tables found in this database.")
 		elements = append(elements, m.TablesList.View())
 		elements = append(elements, emptyMsg)
-	} else {
-		statusText := styles.SuccessStyle.Render(fmt.Sprintf("✅ Connected successfully (%d tables found)", len(m.Tables)))
-		elements = append(elements, statusText)
-		elements = append(elements, "")
-		elements = append(elements, m.TablesList.View())
-	}
+    } else {
+        // Show tables list without success banner
+        elements = append(elements, m.TablesList.View())
+    }
 
 	content := lipgloss.JoinVertical(lipgloss.Left, elements...)
 

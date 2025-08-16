@@ -1773,12 +1773,10 @@ func (m model) tablesView() string {
 			emptyMsg := infoStyle.Render("📋 No tables found in this database.\n\nThe database might be empty or you might not have sufficient permissions.")
 			elements = append(elements, m.tablesList.View())
 			elements = append(elements, emptyMsg)
-		} else {
-			statusText := successStyle.Render(fmt.Sprintf("✅ Connected successfully (%d tables found)", len(m.tables)))
-			elements = append(elements, statusText)
-			elements = append(elements, "") // Empty line
-			elements = append(elements, m.tablesList.View())
-		}
+        } else {
+            // Show tables list without success banner
+            elements = append(elements, m.tablesList.View())
+        }
 
 		content = lipgloss.JoinVertical(lipgloss.Left, elements...)
 	}
