@@ -21,12 +21,12 @@ var (
 	ErrorRed      = lipgloss.Color("#EF4444")
 	WarningOrange = lipgloss.Color("#F59E0B")
 
-	// Main title style with gradient-like magenta
-	TitleStyle = lipgloss.NewStyle().
-			Foreground(PrimaryMagenta).
-			Padding(0, 1).
-			Margin(0, 0, 1, 0).
-			Bold(true)
+    // Main title style with transparent background and no border
+    TitleStyle = lipgloss.NewStyle().
+            Foreground(PrimaryMagenta).
+            Padding(0, 1).
+            Margin(0, 0, 1, 0).
+            Bold(true)
 
 	// Subtitle for sections
 	SubtitleStyle = lipgloss.NewStyle().
