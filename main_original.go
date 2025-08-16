@@ -346,6 +346,11 @@ func initialModel() model {
 
     dbList := list.New(items, list.NewDefaultDelegate(), 0, 0)
     dbList.Title = "🗄️ DBX — Database Explorer"
+    // Remove any default title background and apply our title style
+    ls := list.DefaultStyles()
+    ls.Title = styles.TitleStyle
+    ls.TitleBar = lipgloss.NewStyle()
+    dbList.SetStyles(ls)
 	dbList.SetShowStatusBar(false)
 	dbList.SetFilteringEnabled(false)
 	dbList.SetShowHelp(false)
