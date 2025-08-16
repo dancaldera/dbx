@@ -21,11 +21,18 @@ var (
 	ErrorRed      = lipgloss.Color("#EF4444")
 	WarningOrange = lipgloss.Color("#F59E0B")
 
-    // Main title style with transparent background and no border
+    // Main title style used in content views
     TitleStyle = lipgloss.NewStyle().
             Foreground(PrimaryMagenta).
             Padding(0, 1).
             Margin(0, 0, 1, 0).
+            Bold(true)
+
+    // List header title style (no extra spacing)
+    ListTitleStyle = lipgloss.NewStyle().
+            Foreground(PrimaryMagenta).
+            Padding(0).
+            Margin(0).
             Bold(true)
 
 	// Subtitle for sections

@@ -44,7 +44,7 @@ func initialModel() models.Model {
     dbList.Title = "🗄️ DBX — Database Explorer"
     // Remove any default title background and apply our title style
     ls := list.DefaultStyles()
-    ls.Title = styles.TitleStyle
+    ls.Title = styles.ListTitleStyle
     ls.TitleBar = lipgloss.NewStyle()
     dbList.SetStyles(ls)
 	dbList.SetShowStatusBar(false)
@@ -61,7 +61,7 @@ func initialModel() models.Model {
     savedConnectionsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
     savedConnectionsList.Title = "💾 Saved Connections"
     scLS := list.DefaultStyles()
-    scLS.Title = styles.TitleStyle
+    scLS.Title = styles.ListTitleStyle
     scLS.TitleBar = lipgloss.NewStyle()
     savedConnectionsList.SetStyles(scLS)
     savedConnectionsList.SetShowStatusBar(false)
@@ -111,7 +111,7 @@ func initialModel() models.Model {
     tablesList := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
     tablesList.Title = "📊 Available Tables"
     tblLS := list.DefaultStyles()
-    tblLS.Title = styles.TitleStyle
+    tblLS.Title = styles.ListTitleStyle
     tblLS.TitleBar = lipgloss.NewStyle()
     tablesList.SetStyles(tblLS)
     tablesList.SetShowStatusBar(false)

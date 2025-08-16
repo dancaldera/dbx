@@ -348,7 +348,7 @@ func initialModel() model {
     dbList.Title = "🗄️ DBX — Database Explorer"
     // Remove any default title background and apply our title style
     ls := list.DefaultStyles()
-    ls.Title = styles.TitleStyle
+    ls.Title = styles.ListTitleStyle
     ls.TitleBar = lipgloss.NewStyle()
     dbList.SetStyles(ls)
 	dbList.SetShowStatusBar(false)
@@ -365,7 +365,7 @@ func initialModel() model {
     savedConnectionsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
     savedConnectionsList.Title = "💾 Saved Connections"
     scLS := list.DefaultStyles()
-    scLS.Title = styles.TitleStyle
+    scLS.Title = styles.ListTitleStyle
     scLS.TitleBar = lipgloss.NewStyle()
     savedConnectionsList.SetStyles(scLS)
     savedConnectionsList.SetShowStatusBar(false)
@@ -415,7 +415,7 @@ func initialModel() model {
     tablesList := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
     tablesList.Title = "📊 Available Tables"
     tblLS := list.DefaultStyles()
-    tblLS.Title = styles.TitleStyle
+    tblLS.Title = styles.ListTitleStyle
     tblLS.TitleBar = lipgloss.NewStyle()
     tablesList.SetStyles(tblLS)
     tablesList.SetShowStatusBar(false)
@@ -496,7 +496,7 @@ func initialModel() model {
     queryHistoryList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
     queryHistoryList.Title = "📝 Query History"
     qhLS := list.DefaultStyles()
-    qhLS.Title = styles.TitleStyle
+    qhLS.Title = styles.ListTitleStyle
     qhLS.TitleBar = lipgloss.NewStyle()
     queryHistoryList.SetStyles(qhLS)
     queryHistoryList.SetShowStatusBar(false)
@@ -507,7 +507,7 @@ func initialModel() model {
     schemasList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
     schemasList.Title = "🗂️ Database Schemas"
     schLS := list.DefaultStyles()
-    schLS.Title = styles.TitleStyle
+    schLS.Title = styles.ListTitleStyle
     schLS.TitleBar = lipgloss.NewStyle()
     schemasList.SetStyles(schLS)
     schemasList.SetShowStatusBar(false)
