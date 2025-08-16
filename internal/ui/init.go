@@ -39,7 +39,7 @@ func InitialModel() models.Model {
     ls := list.DefaultStyles()
     ls.Title = styles.ListTitleStyle
     ls.TitleBar = lipgloss.NewStyle()
-    dbList.SetStyles(ls)
+    dbList.Styles = ls
 	dbList.SetShowStatusBar(false)
 	dbList.SetFilteringEnabled(false)
 	dbList.SetShowHelp(false)
@@ -57,7 +57,7 @@ func InitialModel() models.Model {
     scLS := list.DefaultStyles()
     scLS.Title = styles.ListTitleStyle
     scLS.TitleBar = lipgloss.NewStyle()
-    savedConnectionsList.SetStyles(scLS)
+    savedConnectionsList.Styles = scLS
     savedConnectionsList.SetShowStatusBar(false)
 	savedConnectionsList.SetFilteringEnabled(false)
 	savedConnectionsList.SetShowHelp(false)
@@ -108,7 +108,7 @@ func InitialModel() models.Model {
     tblLS := list.DefaultStyles()
     tblLS.Title = styles.ListTitleStyle
     tblLS.TitleBar = lipgloss.NewStyle()
-    tablesList.SetStyles(tblLS)
+    tablesList.Styles = tblLS
     tablesList.SetShowStatusBar(false)
 	tablesList.SetFilteringEnabled(false)
 	tablesList.SetShowHelp(false)
@@ -190,7 +190,7 @@ func InitialModel() models.Model {
     qhLS := list.DefaultStyles()
     qhLS.Title = styles.ListTitleStyle
     qhLS.TitleBar = lipgloss.NewStyle()
-    queryHistoryList.SetStyles(qhLS)
+    queryHistoryList.Styles = qhLS
     queryHistoryList.SetShowStatusBar(false)
 	queryHistoryList.SetFilteringEnabled(false)
 	queryHistoryList.SetShowHelp(false)
@@ -202,7 +202,7 @@ func InitialModel() models.Model {
     schLS := list.DefaultStyles()
     schLS.Title = styles.ListTitleStyle
     schLS.TitleBar = lipgloss.NewStyle()
-    schemasList.SetStyles(schLS)
+    schemasList.Styles = schLS
     schemasList.SetShowStatusBar(false)
 	schemasList.SetFilteringEnabled(false)
 	schemasList.SetShowHelp(false)

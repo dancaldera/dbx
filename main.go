@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
@@ -46,7 +47,7 @@ func initialModel() models.Model {
     ls := list.DefaultStyles()
     ls.Title = styles.ListTitleStyle
     ls.TitleBar = lipgloss.NewStyle()
-    dbList.SetStyles(ls)
+    dbList.Styles = ls
 	dbList.SetShowStatusBar(false)
 	dbList.SetFilteringEnabled(false)
 	dbList.SetShowHelp(false)
@@ -63,7 +64,7 @@ func initialModel() models.Model {
     scLS := list.DefaultStyles()
     scLS.Title = styles.ListTitleStyle
     scLS.TitleBar = lipgloss.NewStyle()
-    savedConnectionsList.SetStyles(scLS)
+    savedConnectionsList.Styles = scLS
     savedConnectionsList.SetShowStatusBar(false)
 	savedConnectionsList.SetFilteringEnabled(false)
 	savedConnectionsList.SetShowHelp(false)
@@ -113,7 +114,7 @@ func initialModel() models.Model {
     tblLS := list.DefaultStyles()
     tblLS.Title = styles.ListTitleStyle
     tblLS.TitleBar = lipgloss.NewStyle()
-    tablesList.SetStyles(tblLS)
+    tablesList.Styles = tblLS
     tablesList.SetShowStatusBar(false)
 	tablesList.SetFilteringEnabled(false)
 	tablesList.SetShowHelp(false)
