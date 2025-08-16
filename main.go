@@ -193,8 +193,12 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return handleConnectResult(m, msg)
 	case models.TestConnectionResult:
 		return handleTestConnectionResult(m, msg)
-	case models.ColumnsResult:
-		return handleColumnsResult(m, msg)
+    case models.ColumnsResult:
+        return handleColumnsResult(m, msg)
+    case models.DataPreviewResult:
+        return handleDataPreviewResult(m, msg)
+    case models.RelationshipsResult:
+        return handleRelationshipsResult(m, msg)
 	case models.ClearResultMsg:
 		m.QueryResult = ""
 		return m, nil
@@ -229,8 +233,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 
-		case "esc":
-			switch m.State {
+        case "esc":
+            switch m.State {
 			case models.SavedConnectionsView:
 				m.State = models.DBTypeView
 				m.Err = nil
@@ -255,10 +259,14 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.TableInfos = nil
 				m.SelectedTable = ""
 				m.Err = nil
-			case models.ColumnsView:
-				m.State = models.TablesView
-			}
-			return m, nil
+            case models.ColumnsView:
+                m.State = models.TablesView
+            case models.DataPreviewView:
+                m.State = models.TablesView
+            case models.RelationshipsView:
+                m.State = models.TablesView
+            }
+            return m, nil
 
 		case "s":
 			if m.State == models.DBTypeView {
@@ -354,6 +362,19 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, loadColumns(m)
 				}
 			}
+		case "p":
+			if m.State == models.TablesView {
+				if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingPreview {
+					m.SelectedTable = i.ItemTitle
+					m.IsLoadingPreview = true
+					m.Err = nil
+					return m, loadDataPreview(m)
+				}
+			}
+		case "f":
+			if m.State == models.TablesView && m.DB != nil {
+				return m, loadRelationships(m)
+			}
 		}
 	}
 
@@ -387,9 +408,19 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.NameInput, cmd = m.NameInput.Update(msg)
 	case models.TablesView:
 		m.TablesList, cmd = m.TablesList.Update(msg)
-	case models.ColumnsView:
-		m.ColumnsTable, cmd = m.ColumnsTable.Update(msg)
-	}
+	case models.DataPreviewView:
+		m.DataPreviewTable, cmd = m.DataPreviewTable.Update(msg)
+    case models.ColumnsView:
+        m.ColumnsTable, cmd = m.ColumnsTable.Update(msg)
+    case models.DataPreviewView:
+        if km, ok := msg.(tea.KeyMsg); ok {
+            switch km.String() {
+            case "r":
+                return m, loadDataPreview(m)
+            }
+        }
+        m.DataPreviewTable, cmd = m.DataPreviewTable.Update(msg)
+    }
 
 	return m, cmd
 }
@@ -406,6 +437,10 @@ func (m appModel) View() string {
 		return views.SaveConnectionView(m.Model)
 	case models.TablesView:
 		return views.TablesView(m.Model)
+	case models.DataPreviewView:
+		return views.DataPreviewView(m.Model)
+	case models.RelationshipsView:
+		return views.RelationshipsView(m.Model)
 	case models.ColumnsView:
 		return views.ColumnsView(m.Model)
 	default:
@@ -537,6 +572,78 @@ func handleColumnsResult(m appModel, msg models.ColumnsResult) (appModel, tea.Cm
 	m.State = models.ColumnsView
 
 	return m, nil
+}
+
+func loadDataPreview(m appModel) tea.Cmd {
+    return tea.Cmd(func() tea.Msg {
+        cols, rows, err := database.GetTablePreview(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, 10)
+        return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err}
+    })
+}
+
+func handleDataPreviewResult(m appModel, msg models.DataPreviewResult) (appModel, tea.Cmd) {
+    m.IsLoadingPreview = false
+    if msg.Err != nil {
+        m.Err = msg.Err
+        return m, nil
+    }
+    // Build columns meta
+    cols := make([]table.Column, len(msg.Columns))
+    for i, c := range msg.Columns {
+        cols[i] = table.Column{Title: c, Width: 16}
+    }
+    // Build rows
+    rows := make([]table.Row, len(msg.Rows))
+    for i, r := range msg.Rows {
+        tr := make(table.Row, len(r))
+        copy(tr, r)
+        rows[i] = tr
+    }
+    // Recreate table with new columns/rows
+    m.DataPreviewTable = table.New(
+        table.WithColumns(cols),
+        table.WithRows(rows),
+        table.WithFocused(true),
+        table.WithHeight(10),
+    )
+    m.DataPreviewTable.SetStyles(styles.GetMagentaTableStyles())
+    m.State = models.DataPreviewView
+    return m, nil
+}
+
+func loadRelationships(m appModel) tea.Cmd {
+    return tea.Cmd(func() tea.Msg {
+        rels, err := database.GetForeignKeyRelationships(m.DB, m.SelectedDB.Driver, m.SelectedSchema)
+        return models.RelationshipsResult{Relationships: rels, Err: err}
+    })
+}
+
+func handleRelationshipsResult(m appModel, msg models.RelationshipsResult) (appModel, tea.Cmd) {
+    if msg.Err != nil {
+        m.Err = msg.Err
+        return m, nil
+    }
+    // columns: From Table, From Column, To Table, To Column, Constraint Name
+    cols := []table.Column{
+        {Title: "From Table", Width: 20},
+        {Title: "From Column", Width: 20},
+        {Title: "To Table", Width: 20},
+        {Title: "To Column", Width: 20},
+        {Title: "Constraint Name", Width: 25},
+    }
+    rows := make([]table.Row, len(msg.Relationships))
+    for i, rel := range msg.Relationships {
+        rows[i] = table.Row(rel)
+    }
+    m.RelationshipsTable = table.New(
+        table.WithColumns(cols),
+        table.WithRows(rows),
+        table.WithFocused(true),
+        table.WithHeight(10),
+    )
+    m.RelationshipsTable.SetStyles(styles.GetMagentaTableStyles())
+    m.State = models.RelationshipsView
+    return m, nil
 }
 
 // Helper functions

@@ -1,11 +1,11 @@
 package database
 
 import (
-	"context"
-	"database/sql"
-	"fmt"
-	"strings"
-	"time"
+    "context"
+    "database/sql"
+    "fmt"
+    "strings"
+    "time"
 
 	"github.com/danielcaldera/dbx/internal/models"
 )
@@ -376,4 +376,62 @@ func GetSimpleTableInfos(db *sql.DB, driver, schema string) ([]models.TableInfo,
 	}
 
 	return tableInfos, nil
+}
+
+// GetTablePreview returns first N rows from a table/view with column names
+func GetTablePreview(db *sql.DB, driver, tableName, schema string, limit int) ([]string, [][]string, error) {
+    if limit <= 0 {
+        limit = 10
+    }
+
+    var query string
+    switch driver {
+    case "postgres":
+        if schema == "" {
+            schema = "public"
+        }
+        query = fmt.Sprintf("SELECT * FROM \"%s\".\"%s\" LIMIT %d", schema, tableName, limit)
+    case "mysql":
+        query = fmt.Sprintf("SELECT * FROM `%s` LIMIT %d", tableName, limit)
+    case "sqlite3":
+        query = fmt.Sprintf("SELECT * FROM \"%s\" LIMIT %d", tableName, limit)
+    default:
+        return nil, nil, fmt.Errorf("unsupported driver: %s", driver)
+    }
+
+    rows, err := db.Query(query)
+    if err != nil {
+        return nil, nil, err
+    }
+    defer rows.Close()
+
+    cols, err := rows.Columns()
+    if err != nil {
+        return nil, nil, err
+    }
+
+    var result [][]string
+    for rows.Next() {
+        values := make([]interface{}, len(cols))
+        valuePtrs := make([]interface{}, len(cols))
+        for i := range values {
+            valuePtrs[i] = &values[i]
+        }
+        if err := rows.Scan(valuePtrs...); err != nil {
+            return nil, nil, err
+        }
+        record := make([]string, len(cols))
+        for i, v := range values {
+            switch t := v.(type) {
+            case nil:
+                record[i] = "NULL"
+            case []byte:
+                record[i] = string(t)
+            default:
+                record[i] = fmt.Sprintf("%v", t)
+            }
+        }
+        result = append(result, record)
+    }
+    return cols, result, nil
 }
