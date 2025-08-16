@@ -1,8 +1,8 @@
 package styles
 
 import (
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/lipgloss"
+    "github.com/charmbracelet/bubbles/table"
+    "github.com/charmbracelet/lipgloss"
 )
 
 // Global styles with magenta theme
@@ -34,36 +34,44 @@ var (
 			Bold(true).
 			Margin(0, 0, 1, 0)
 
-	// Focused/selected item style
-	FocusedStyle = lipgloss.NewStyle().
-			Foreground(AccentMagenta).
-			Padding(0, 1).
-			Bold(true).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(PrimaryMagenta)
+    // Invisible/transparent-like border to keep layout spacing without drawing lines
+    TransparentBorder = lipgloss.Border{
+            Top:        " ",
+            Bottom:     " ",
+            Left:       " ",
+            Right:      " ",
+            TopLeft:    " ",
+            TopRight:   " ",
+            BottomLeft: " ",
+            BottomRight:" ",
+    }
+
+    // Focused/selected item style
+    FocusedStyle = lipgloss.NewStyle().
+            Foreground(AccentMagenta).
+            Padding(0, 1).
+            Bold(true).
+            Border(TransparentBorder)
 
 	// Input field styling
-	InputStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(PrimaryMagenta).
-			Padding(0, 1).
-			Margin(0, 0, 1, 0)
+    InputStyle = lipgloss.NewStyle().
+            Border(TransparentBorder).
+            Padding(0, 1).
+            Margin(0, 0, 1, 0)
 
 	// Input field when focused
-	InputFocusedStyle = lipgloss.NewStyle().
-				Border(lipgloss.ThickBorder()).
-				BorderForeground(PrimaryMagenta).
-				Padding(0, 1).
-				Margin(0, 0, 1, 0)
+    InputFocusedStyle = lipgloss.NewStyle().
+                Border(TransparentBorder).
+                Padding(0, 1).
+                Margin(0, 0, 1, 0)
 
 	// Help text style
-	HelpStyle = lipgloss.NewStyle().
-			Foreground(LightGray).
-			Italic(true).
-			Margin(1, 0).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(LightGray).
-			Padding(0, 1)
+    HelpStyle = lipgloss.NewStyle().
+            Foreground(LightGray).
+            Italic(true).
+            Margin(1, 0).
+            Border(TransparentBorder).
+            Padding(0, 1)
 
 	// Key binding help style
 	KeyStyle = lipgloss.NewStyle().
@@ -71,36 +79,32 @@ var (
 			Bold(true)
 
 	// Error messages
-	ErrorStyle = lipgloss.NewStyle().
-			Foreground(ErrorRed).
-			Padding(0, 1).
-			Bold(true).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(ErrorRed)
+    ErrorStyle = lipgloss.NewStyle().
+            Foreground(ErrorRed).
+            Padding(0, 1).
+            Bold(true).
+            Border(TransparentBorder)
 
 	// Success messages
-	SuccessStyle = lipgloss.NewStyle().
-			Foreground(SuccessGreen).
-			Padding(0, 1).
-			Bold(true).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(SuccessGreen)
+    SuccessStyle = lipgloss.NewStyle().
+            Foreground(SuccessGreen).
+            Padding(0, 1).
+            Bold(true).
+            Border(TransparentBorder)
 
 	// Warning messages
-	WarningStyle = lipgloss.NewStyle().
-			Foreground(WarningOrange).
-			Padding(0, 1).
-			Bold(true).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(WarningOrange)
+    WarningStyle = lipgloss.NewStyle().
+            Foreground(WarningOrange).
+            Padding(0, 1).
+            Bold(true).
+            Border(TransparentBorder)
 
 	// Information boxes
-	InfoStyle = lipgloss.NewStyle().
-			Foreground(DarkMagenta).
-			Padding(1, 2).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(PrimaryMagenta).
-			Margin(0, 0, 1, 0)
+    InfoStyle = lipgloss.NewStyle().
+            Foreground(DarkMagenta).
+            Padding(1, 2).
+            Border(TransparentBorder).
+            Margin(0, 0, 1, 0)
 
 	// Table header style
 	TableHeaderStyle = lipgloss.NewStyle().
@@ -115,11 +119,10 @@ var (
 			Padding(1)
 
 	// Card-like container for sections
-	CardStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(AccentMagenta).
-			Padding(1, 2).
-			Margin(0, 0, 1, 0)
+    CardStyle = lipgloss.NewStyle().
+            Border(TransparentBorder).
+            Padding(1, 2).
+            Margin(0, 0, 1, 0)
 
 	// Loading indicator style
 	LoadingStyle = lipgloss.NewStyle().
@@ -130,18 +133,15 @@ var (
 
 // GetMagentaTableStyles returns table styles with magenta theme
 func GetMagentaTableStyles() table.Styles {
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		Foreground(DarkMagenta).
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(PrimaryMagenta).
-		BorderBottom(true).
-		Bold(true).
-		Align(lipgloss.Center)
-	s.Selected = s.Selected.
-		Foreground(AccentMagenta).
-		Bold(true)
-	s.Cell = s.Cell.
-		Padding(0, 1)
-	return s
+    s := table.DefaultStyles()
+    s.Header = s.Header.
+        Foreground(DarkMagenta).
+        Bold(true).
+        Align(lipgloss.Center)
+    s.Selected = s.Selected.
+        Foreground(AccentMagenta).
+        Bold(true)
+    s.Cell = s.Cell.
+        Padding(0, 1)
+    return s
 }
