@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,7 +46,7 @@ func initialModel() models.Model {
 	}
 
 	dbList := list.New(items, list.NewDefaultDelegate(), 0, 0)
-    dbList.Title = "DBX — Database Explorer"
+	dbList.Title = "DBX — Database Explorer"
 	// Remove any default title background and apply our title style
 	ls := list.DefaultStyles()
 	ls.Title = styles.ListTitleStyle
@@ -62,7 +64,7 @@ func initialModel() models.Model {
 
 	// Saved connections list
 	savedConnectionsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
-    savedConnectionsList.Title = "Saved Connections"
+	savedConnectionsList.Title = "Saved Connections"
 	scLS := list.DefaultStyles()
 	scLS.Title = styles.ListTitleStyle
 	scLS.TitleBar = lipgloss.NewStyle()
@@ -151,8 +153,8 @@ func initialModel() models.Model {
 	// Initialize textarea for field editing
 	ta := textarea.New()
 	ta.Placeholder = "Enter field content..."
-	ta.SetWidth(100)  // Will be dynamically resized
-	ta.SetHeight(20)  // Will be dynamically resized
+	ta.SetWidth(100) // Will be dynamically resized
+	ta.SetHeight(20) // Will be dynamically resized
 	ta.ShowLineNumbers = true
 
 	// Initialize filter input
@@ -180,7 +182,7 @@ func initialModel() models.Model {
 		FieldDetailCharsPerLine: 120,         // Show 120 characters per line in field detail view
 		FieldTextarea:           ta,          // Initialize textarea for field editing
 		DataPreviewCurrentPage:  0,           // Start at first page
-        DataPreviewItemsPerPage: 40,          // Show 40 items per page
+		DataPreviewItemsPerPage: 40,          // Show 40 items per page
 		DataPreviewTotalRows:    0,           // Will be set when loading data
 		DataPreviewScrollOffset: 0,           // Start at first column
 		DataPreviewVisibleCols:  6,           // Show 6 columns at once
@@ -239,7 +241,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.NameInput.Width = msg.Width - h - 4
 		m.QueryInput.Width = msg.Width - h - 4
 		m.SearchInput.Width = msg.Width - h - 4
-		
+
 		// Update textarea size for field editing
 		textareaWidth := msg.Width - h - 4
 		textareaHeight := msg.Height - v - 8 // Reserve space for title and help text only
@@ -313,7 +315,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case models.RelationshipsView:
 				m.State = models.TablesView
 				return m, nil
-			// Note: RowDetailView ESC handling is done in the specific handler below
+				// Note: RowDetailView ESC handling is done in the specific handler below
 			}
 
 		case "s":
@@ -606,27 +608,25 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							var items []list.Item
 							for i, col := range m.DataPreviewAllColumns {
 								var value string
-									if i < len(m.SelectedRowData) {
-										value = m.SelectedRowData[i]
-									} else {
-										value = "NULL"
-									}
-									items = append(items, models.FieldItem{Name: col, Value: value})
+								if i < len(m.SelectedRowData) {
+									value = m.SelectedRowData[i]
+								} else {
+									value = "NULL"
 								}
+								items = append(items, models.FieldItem{Name: col, Value: value})
+							}
 
-                            // Initialize the row detail list (full-width/height)
-                            delegate := list.NewDefaultDelegate()
-                            // Compact spacing to show more items
-                            delegate.SetSpacing(0)
-                            m.RowDetailList = list.New(items, delegate, 0, 0)
-                            m.RowDetailList.Title = "Select a field to view its full content"
-                            m.RowDetailList.SetShowStatusBar(false)
-                            m.RowDetailList.SetFilteringEnabled(false)
-                            // Hide built-in help to avoid duplicate help sections
-                            m.RowDetailList.SetShowHelp(false)
-                            // Size the list to available viewport immediately
-                            h, v := styles.DocStyle.GetFrameSize()
-                            m.RowDetailList.SetSize(m.Width-h, m.Height-v-8)
+							// Initialize the row detail list (full-width/height)
+							// Use custom delegate to show type badges aligned right
+							m.RowDetailList = list.New(items, fieldItemDelegate{}, 0, 0)
+							m.RowDetailList.Title = "Select a field to view its full content"
+							m.RowDetailList.SetShowStatusBar(false)
+							m.RowDetailList.SetFilteringEnabled(false)
+							// Hide built-in help to avoid duplicate help sections
+							m.RowDetailList.SetShowHelp(false)
+							// Size the list to available viewport immediately
+							h, v := styles.DocStyle.GetFrameSize()
+							m.RowDetailList.SetSize(m.Width-h, m.Height-v-8)
 							m.IsViewingFieldDetail = false
 
 							m.State = models.RowDetailView
@@ -707,7 +707,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if selectedItem, ok := m.RowDetailList.SelectedItem().(models.FieldItem); ok {
 						m.EditingFieldName = selectedItem.Name
 						m.OriginalFieldValue = selectedItem.Value
-						
+
 						// Find the field index
 						for i, col := range m.DataPreviewAllColumns {
 							if col == selectedItem.Name {
@@ -715,11 +715,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								break
 							}
 						}
-						
+
 						// Initialize textarea with current value and place cursor at start
 						m.FieldTextarea.SetValue(selectedItem.Value)
 						m.FieldTextarea.CursorStart()
-						
+
 						// Set responsive textarea size
 						h, v := styles.DocStyle.GetFrameSize()
 						textareaWidth := m.Width - h - 4
@@ -733,7 +733,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						m.FieldTextarea.SetWidth(textareaWidth)
 						m.FieldTextarea.SetHeight(textareaHeight)
-						
+
 						m.FieldTextarea.Focus()
 						m.IsEditingField = true
 					}
@@ -816,7 +816,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if scrollIncrement < 5 {
 						scrollIncrement = 5 // Minimum scroll
 					}
-					
+
 					m.FieldDetailHorizontalOffset -= scrollIncrement
 					if m.FieldDetailHorizontalOffset < 0 {
 						m.FieldDetailHorizontalOffset = 0
@@ -837,7 +837,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if scrollIncrement < 5 {
 						scrollIncrement = 5 // Minimum scroll
 					}
-					
+
 					m.FieldDetailHorizontalOffset += scrollIncrement
 					return m, nil
 				}
@@ -1141,134 +1141,134 @@ func handleDataPreviewResult(m appModel, msg models.DataPreviewResult) (appModel
 }
 
 func createDataPreviewTable(m appModel) appModel {
-    if len(m.DataPreviewAllColumns) == 0 {
-        return m
-    }
+	if len(m.DataPreviewAllColumns) == 0 {
+		return m
+	}
 
-    // Determine available width for table content within the document frame
-    h, v := styles.DocStyle.GetFrameSize()
-    availableWidth := m.Width - h - 4
-    if availableWidth < 20 {
-        availableWidth = 20
-    }
+	// Determine available width for table content within the document frame
+	h, v := styles.DocStyle.GetFrameSize()
+	availableWidth := m.Width - h - 4
+	if availableWidth < 20 {
+		availableWidth = 20
+	}
 
-    // Precompute width for every column (based on header and data) capped to [8, 40]
-    colWidths := make([]int, len(m.DataPreviewAllColumns))
-    for colIdx, c := range m.DataPreviewAllColumns {
-        maxWidth := len(c)
-        for _, row := range m.DataPreviewAllRows {
-            if colIdx < len(row) {
-                cellLength := len(row[colIdx])
-                if cellLength > 40 {
-                    cellLength = 40
-                }
-                if cellLength > maxWidth {
-                    maxWidth = cellLength
-                }
-            }
-        }
-        if maxWidth < 8 {
-            maxWidth = 8
-        } else if maxWidth > 40 {
-            maxWidth = 40
-        }
-        colWidths[colIdx] = maxWidth
-    }
+	// Precompute width for every column (based on header and data) capped to [8, 40]
+	colWidths := make([]int, len(m.DataPreviewAllColumns))
+	for colIdx, c := range m.DataPreviewAllColumns {
+		maxWidth := len(c)
+		for _, row := range m.DataPreviewAllRows {
+			if colIdx < len(row) {
+				cellLength := len(row[colIdx])
+				if cellLength > 40 {
+					cellLength = 40
+				}
+				if cellLength > maxWidth {
+					maxWidth = cellLength
+				}
+			}
+		}
+		if maxWidth < 8 {
+			maxWidth = 8
+		} else if maxWidth > 40 {
+			maxWidth = 40
+		}
+		colWidths[colIdx] = maxWidth
+	}
 
-    // Compute how many columns fit starting from the current scroll offset
-    startCol := m.DataPreviewScrollOffset
-    sum := 0
-    endCol := startCol
-    for endCol < len(colWidths) {
-        // Rough allowance for padding/separators per column
-        next := colWidths[endCol] + 3
-        if sum+next > availableWidth {
-            break
-        }
-        sum += next
-        endCol++
-    }
-    if endCol == startCol {
-        // Ensure at least one column is visible
-        endCol = min(startCol+1, len(colWidths))
-    }
-    visibleCount := endCol - startCol
-    if visibleCount < 0 {
-        visibleCount = 0
-    }
-    m.DataPreviewVisibleCols = visibleCount
+	// Compute how many columns fit starting from the current scroll offset
+	startCol := m.DataPreviewScrollOffset
+	sum := 0
+	endCol := startCol
+	for endCol < len(colWidths) {
+		// Rough allowance for padding/separators per column
+		next := colWidths[endCol] + 3
+		if sum+next > availableWidth {
+			break
+		}
+		sum += next
+		endCol++
+	}
+	if endCol == startCol {
+		// Ensure at least one column is visible
+		endCol = min(startCol+1, len(colWidths))
+	}
+	visibleCount := endCol - startCol
+	if visibleCount < 0 {
+		visibleCount = 0
+	}
+	m.DataPreviewVisibleCols = visibleCount
 
-    // Build visible columns
-    visibleCols := m.DataPreviewAllColumns[startCol:endCol]
-    cols := make([]table.Column, len(visibleCols))
-    for i, c := range visibleCols {
-        cols[i] = table.Column{Title: c, Width: colWidths[startCol+i]}
-    }
+	// Build visible columns
+	visibleCols := m.DataPreviewAllColumns[startCol:endCol]
+	cols := make([]table.Column, len(visibleCols))
+	for i, c := range visibleCols {
+		cols[i] = table.Column{Title: c, Width: colWidths[startCol+i]}
+	}
 
-    // Build visible rows with content truncation per computed column width
-    rows := make([]table.Row, len(m.DataPreviewAllRows))
-    for i, r := range m.DataPreviewAllRows {
-        visibleCells := make(table.Row, len(visibleCols))
-        for j := 0; j < len(visibleCols); j++ {
-            colIndex := startCol + j
-            if colIndex < len(r) {
-                cell := r[colIndex]
-                maxW := colWidths[colIndex]
-                if len(cell) > maxW {
-                    ellipsis := 0
-                    if maxW >= 3 {
-                        ellipsis = 3
-                    }
-                    trim := max(0, maxW-ellipsis)
-                    if trim <= 0 {
-                        visibleCells[j] = ""
-                    } else if ellipsis > 0 {
-                        visibleCells[j] = cell[:trim] + "..."
-                    } else {
-                        visibleCells[j] = cell[:trim]
-                    }
-                } else {
-                    visibleCells[j] = cell
-                }
-            } else {
-                visibleCells[j] = ""
-            }
-        }
-        rows[i] = visibleCells
-    }
+	// Build visible rows with content truncation per computed column width
+	rows := make([]table.Row, len(m.DataPreviewAllRows))
+	for i, r := range m.DataPreviewAllRows {
+		visibleCells := make(table.Row, len(visibleCols))
+		for j := 0; j < len(visibleCols); j++ {
+			colIndex := startCol + j
+			if colIndex < len(r) {
+				cell := r[colIndex]
+				maxW := colWidths[colIndex]
+				if len(cell) > maxW {
+					ellipsis := 0
+					if maxW >= 3 {
+						ellipsis = 3
+					}
+					trim := max(0, maxW-ellipsis)
+					if trim <= 0 {
+						visibleCells[j] = ""
+					} else if ellipsis > 0 {
+						visibleCells[j] = cell[:trim] + "..."
+					} else {
+						visibleCells[j] = cell[:trim]
+					}
+				} else {
+					visibleCells[j] = cell
+				}
+			} else {
+				visibleCells[j] = ""
+			}
+		}
+		rows[i] = visibleCells
+	}
 
-    // Compute dynamic height to use remaining vertical space
-    reserved := 10 // Title + info + help, approximate
-    availableHeight := m.Height - v - reserved
-    if availableHeight < 5 {
-        availableHeight = 5
-    }
+	// Compute dynamic height to use remaining vertical space
+	reserved := 10 // Title + info + help, approximate
+	availableHeight := m.Height - v - reserved
+	if availableHeight < 5 {
+		availableHeight = 5
+	}
 
-    // Recreate table with visible columns/rows and dynamic height
-    m.DataPreviewTable = table.New(
-        table.WithColumns(cols),
-        table.WithRows(rows),
-        table.WithFocused(true),
-        table.WithHeight(availableHeight),
-    )
-    m.DataPreviewTable.SetStyles(styles.GetMagentaTableStyles())
+	// Recreate table with visible columns/rows and dynamic height
+	m.DataPreviewTable = table.New(
+		table.WithColumns(cols),
+		table.WithRows(rows),
+		table.WithFocused(true),
+		table.WithHeight(availableHeight),
+	)
+	m.DataPreviewTable.SetStyles(styles.GetMagentaTableStyles())
 
-return m
+	return m
 }
 
 // Small helpers for integer min/max
 func min(a, b int) int {
-    if a < b {
-        return a
-    }
-    return b
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func max(a, b int) int {
-    if a > b {
-        return a
-    }
-    return b
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func loadRelationships(m appModel) tea.Cmd {
@@ -1283,33 +1283,33 @@ func handleFieldUpdateResult(m appModel, msg models.FieldUpdateResult) (appModel
 		m.IsEditingField = false
 		m.FieldTextarea.Blur()
 	}
-	
+
 	if msg.Success {
 		// Update the row data with the new value
-				if m.EditingFieldIndex >= 0 && m.EditingFieldIndex < len(m.SelectedRowData) {
-					m.SelectedRowData[m.EditingFieldIndex] = msg.NewValue
-				}
-				
-				// Update the row detail list with the new value
-				items := make([]list.Item, len(m.DataPreviewAllColumns))
-				for i, col := range m.DataPreviewAllColumns {
-					var value string
-					if i < len(m.SelectedRowData) {
-						value = m.SelectedRowData[i]
-					} else {
-						value = "NULL"
-					}
-					items[i] = models.FieldItem{Name: col, Value: value}
-				}
+		if m.EditingFieldIndex >= 0 && m.EditingFieldIndex < len(m.SelectedRowData) {
+			m.SelectedRowData[m.EditingFieldIndex] = msg.NewValue
+		}
+
+		// Update the row detail list with the new value
+		items := make([]list.Item, len(m.DataPreviewAllColumns))
+		for i, col := range m.DataPreviewAllColumns {
+			var value string
+			if i < len(m.SelectedRowData) {
+				value = m.SelectedRowData[i]
+			} else {
+				value = "NULL"
+			}
+			items[i] = models.FieldItem{Name: col, Value: value}
+		}
 		m.RowDetailList.SetItems(items)
-		
+
 		m.QueryResult = "✅ Field updated successfully!"
 		m.Err = nil
-		
+
 		// Clear the editing state
 		m.EditingFieldName = ""
 		m.OriginalFieldValue = ""
-		
+
 		return m, clearResultAfterTimeout()
 	} else {
 		m.Err = msg.Err
@@ -1359,7 +1359,7 @@ func saveFieldEdit(m appModel, newValue string) tea.Cmd {
 	return tea.Cmd(func() tea.Msg {
 		// Find the primary key column and value for the WHERE clause
 		var primaryKeyColumn, primaryKeyValue string
-		
+
 		// Look for common primary key column names
 		for i, col := range m.DataPreviewAllColumns {
 			if col == "id" || col == "Id" || col == "ID" {
@@ -1370,7 +1370,7 @@ func saveFieldEdit(m appModel, newValue string) tea.Cmd {
 				}
 			}
 		}
-		
+
 		// If no 'id' column found, try other common patterns
 		if primaryKeyColumn == "" {
 			for i, col := range m.DataPreviewAllColumns {
@@ -1384,7 +1384,7 @@ func saveFieldEdit(m appModel, newValue string) tea.Cmd {
 				}
 			}
 		}
-		
+
 		if primaryKeyColumn == "" {
 			return models.FieldUpdateResult{
 				Success:  false,
@@ -1392,7 +1392,7 @@ func saveFieldEdit(m appModel, newValue string) tea.Cmd {
 				ExitEdit: false,
 			}
 		}
-		
+
 		// Build UPDATE SQL statement
 		var updateSQL string
 		switch m.SelectedDB.Driver {
@@ -1412,11 +1412,11 @@ func saveFieldEdit(m appModel, newValue string) tea.Cmd {
 				ExitEdit: false,
 			}
 		}
-		
+
 		// Execute the UPDATE statement
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		
+
 		result, err := m.DB.ExecContext(ctx, updateSQL, newValue, primaryKeyValue)
 		if err != nil {
 			return models.FieldUpdateResult{
@@ -1425,7 +1425,7 @@ func saveFieldEdit(m appModel, newValue string) tea.Cmd {
 				ExitEdit: false,
 			}
 		}
-		
+
 		rowsAffected, err := result.RowsAffected()
 		if err != nil {
 			return models.FieldUpdateResult{
@@ -1434,7 +1434,7 @@ func saveFieldEdit(m appModel, newValue string) tea.Cmd {
 				ExitEdit: false,
 			}
 		}
-		
+
 		if rowsAffected == 0 {
 			return models.FieldUpdateResult{
 				Success:  false,
@@ -1442,7 +1442,7 @@ func saveFieldEdit(m appModel, newValue string) tea.Cmd {
 				ExitEdit: false,
 			}
 		}
-		
+
 		return models.FieldUpdateResult{
 			Success:  true,
 			ExitEdit: true,
@@ -1474,4 +1474,88 @@ func main() {
 		fmt.Printf("Error running program: %v", err)
 		os.Exit(1)
 	}
+}
+
+// fieldItemDelegate renders field name/value with a right-aligned type badge.
+type fieldItemDelegate struct{}
+
+func (d fieldItemDelegate) Height() int                               { return 2 }
+func (d fieldItemDelegate) Spacing() int                              { return 0 }
+func (d fieldItemDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
+
+func (d fieldItemDelegate) Render(w io.Writer, m list.Model, index int, it list.Item) {
+	fi, ok := it.(models.FieldItem)
+	if !ok {
+		return
+	}
+	width := m.Width()
+	if width <= 0 {
+		return
+	}
+
+	// Determine type
+	t := inferFieldType(fi.Value)
+	badge := styles.TypeBadgeStyle.Render("[" + t + "]")
+	badgeW := lipgloss.Width(badge)
+
+	// Prepare name line
+	name := fi.Name
+	nameW := width - badgeW - 1
+	if nameW < 0 {
+		nameW = 0
+	}
+	name = lipgloss.Truncate(name, nameW)
+	space1 := strings.Repeat(" ", max(0, width-badgeW-lipgloss.Width(name)))
+
+	// Selected state styling
+	if index == m.Index() {
+		name = styles.FocusedStyle.Render(name)
+	}
+
+	// Write first line: name + right badge
+	fmt.Fprint(w, name+space1+badge)
+
+	// Prepare value line
+	val := fi.Value
+	valW := width - badgeW - 1
+	if valW < 0 {
+		valW = 0
+	}
+	// Show single-line preview; full content available with enter
+	val = lipgloss.Truncate(val, valW)
+	space2 := strings.Repeat(" ", max(0, width-badgeW-lipgloss.Width(val)))
+
+	// Second line
+	fmt.Fprint(w, "\n"+val+space2+badge)
+}
+
+// inferFieldType returns a simple type label based on content heuristics.
+func inferFieldType(v string) string {
+	if v == "NULL" {
+		return "NULL"
+	}
+	if v == "" {
+		return "Text"
+	}
+	// Boolean
+	if v == "true" || v == "false" || v == "TRUE" || v == "FALSE" {
+		return "Bool"
+	}
+	// Numeric
+	if _, err := strconv.ParseInt(v, 10, 64); err == nil {
+		return "Int"
+	}
+	if _, err := strconv.ParseFloat(v, 64); err == nil {
+		return "Float"
+	}
+	// JSON
+	s := strings.TrimSpace(v)
+	if (strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}")) || (strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]")) {
+		return "JSON"
+	}
+	// Datetime (very loose check)
+	if strings.Contains(v, ":") && strings.Contains(v, "-") {
+		return "DateTime"
+	}
+	return "Text"
 }

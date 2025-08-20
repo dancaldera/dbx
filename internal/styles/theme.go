@@ -136,6 +136,11 @@ var (
 			Foreground(AccentMagenta).
 			Bold(true).
 			Italic(true)
+
+	// Type badge style for row details
+	TypeBadgeStyle = lipgloss.NewStyle().
+		Foreground(AccentMagenta).
+		Bold(true)
 )
 
 // GetMagentaTableStyles returns table styles with magenta theme
