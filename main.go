@@ -754,6 +754,13 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, saveFieldEdit(m, newValue)
 				}
 				return m, nil
+			case "ctrl+k":
+				if m.IsEditingField {
+					// Clear all text in the edit textarea
+					m.FieldTextarea.SetValue("")
+					m.FieldTextarea.CursorStart()
+				}
+				return m, nil
 			case "up", "k":
 				if m.IsViewingFieldDetail {
 					// Scroll up in field detail view
