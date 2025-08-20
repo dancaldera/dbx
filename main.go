@@ -151,8 +151,9 @@ func initialModel() models.Model {
 	// Initialize textarea for field editing
 	ta := textarea.New()
 	ta.Placeholder = "Enter field content..."
-	ta.SetWidth(80)
-	ta.SetHeight(20)
+	ta.SetWidth(100)  // Will be dynamically resized
+	ta.SetHeight(20)  // Will be dynamically resized
+	ta.ShowLineNumbers = true
 
 	// Initialize filter input
 	filterInput := textinput.New()
@@ -215,6 +216,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return handleDataPreviewResult(m, msg)
 	case models.RelationshipsResult:
 		return handleRelationshipsResult(m, msg)
+	case models.FieldUpdateResult:
+		return handleFieldUpdateResult(m, msg)
 	case models.ClearResultMsg:
 		m.QueryResult = ""
 		return m, nil
@@ -236,6 +239,18 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.NameInput.Width = msg.Width - h - 4
 		m.QueryInput.Width = msg.Width - h - 4
 		m.SearchInput.Width = msg.Width - h - 4
+		
+		// Update textarea size for field editing
+		textareaWidth := msg.Width - h - 4
+		textareaHeight := msg.Height - v - 8 // Reserve space for title and help text only
+		if textareaWidth < 40 {
+			textareaWidth = 40
+		}
+		if textareaHeight < 5 {
+			textareaHeight = 5
+		}
+		m.FieldTextarea.SetWidth(textareaWidth)
+		m.FieldTextarea.SetHeight(textareaHeight)
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -678,13 +693,63 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				return m, nil
+			case "e":
+				if !m.IsViewingFieldDetail && !m.IsEditingField {
+					// Enter field edit mode
+					if selectedItem, ok := m.RowDetailList.SelectedItem().(models.FieldItem); ok {
+						m.EditingFieldName = selectedItem.Name
+						m.OriginalFieldValue = selectedItem.Value
+						
+						// Find the field index
+						for i, col := range m.DataPreviewAllColumns {
+							if col == selectedItem.Name {
+								m.EditingFieldIndex = i
+								break
+							}
+						}
+						
+						// Initialize textarea with current value and proper sizing
+						m.FieldTextarea.SetValue(selectedItem.Value)
+						
+						// Set responsive textarea size
+						h, v := styles.DocStyle.GetFrameSize()
+						textareaWidth := m.Width - h - 4
+						textareaHeight := m.Height - v - 12 // Reserve space for title, labels, and help text
+						if textareaWidth < 40 {
+							textareaWidth = 40
+						}
+						if textareaHeight < 5 {
+							textareaHeight = 5
+						}
+						m.FieldTextarea.SetWidth(textareaWidth)
+						m.FieldTextarea.SetHeight(textareaHeight)
+						
+						m.FieldTextarea.Focus()
+						m.IsEditingField = true
+					}
+				}
+				return m, nil
 			case "esc":
-				if m.IsViewingFieldDetail {
+				if m.IsEditingField {
+					// Exit edit mode without saving
+					m.IsEditingField = false
+					m.FieldTextarea.Blur()
+					m.EditingFieldName = ""
+					m.OriginalFieldValue = ""
+					return m, nil
+				} else if m.IsViewingFieldDetail {
 					// Exit field detail view, back to field list
 					m.IsViewingFieldDetail = false
 				} else {
 					// Return to data preview
 					m.State = models.DataPreviewView
+				}
+				return m, nil
+			case "ctrl+s":
+				if m.IsEditingField {
+					// Save the edited field
+					newValue := m.FieldTextarea.Value()
+					return m, saveFieldEdit(m, newValue)
 				}
 				return m, nil
 			case "up", "k":
@@ -762,8 +827,13 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Update the list if not viewing field detail
-		if !m.IsViewingFieldDetail {
+		// Update components based on mode
+		if m.IsEditingField {
+			// Update textarea when in edit mode
+			m.FieldTextarea, cmd = m.FieldTextarea.Update(msg)
+			return m, cmd
+		} else if !m.IsViewingFieldDetail {
+			// Update list when in field list mode
 			m.RowDetailList, cmd = m.RowDetailList.Update(msg)
 		} else {
 			// When viewing field detail, don't let other key handlers interfere
@@ -1131,6 +1201,48 @@ func loadRelationships(m appModel) tea.Cmd {
 	})
 }
 
+func handleFieldUpdateResult(m appModel, msg models.FieldUpdateResult) (appModel, tea.Cmd) {
+	if msg.ExitEdit {
+		m.IsEditingField = false
+		m.FieldTextarea.Blur()
+	}
+	
+	if msg.Success {
+		// Update the row data with the new value
+		if m.EditingFieldIndex >= 0 && m.EditingFieldIndex < len(m.SelectedRowData) {
+			m.SelectedRowData[m.EditingFieldIndex] = msg.NewValue
+		}
+		
+		// Update the row detail list with the new value
+		items := make([]list.Item, len(m.DataPreviewAllColumns))
+		for i, col := range m.DataPreviewAllColumns {
+			var value string
+			if i < len(m.SelectedRowData) {
+				value = m.SelectedRowData[i]
+				if value == "" {
+					value = "(Empty)"
+				}
+			} else {
+				value = "NULL"
+			}
+			items[i] = models.FieldItem{Name: col, Value: value}
+		}
+		m.RowDetailList.SetItems(items)
+		
+		m.QueryResult = "✅ Field updated successfully!"
+		m.Err = nil
+		
+		// Clear the editing state
+		m.EditingFieldName = ""
+		m.OriginalFieldValue = ""
+		
+		return m, clearResultAfterTimeout()
+	} else {
+		m.Err = msg.Err
+		return m, nil
+	}
+}
+
 func handleRelationshipsResult(m appModel, msg models.RelationshipsResult) (appModel, tea.Cmd) {
 	if msg.Err != nil {
 		m.Err = msg.Err
@@ -1160,6 +1272,110 @@ func handleRelationshipsResult(m appModel, msg models.RelationshipsResult) (appM
 }
 
 // Helper functions
+
+// Helper function to clear results after a timeout
+func clearResultAfterTimeout() tea.Cmd {
+	return tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
+		return models.ClearResultMsg{}
+	})
+}
+
+// saveFieldEdit creates and executes an UPDATE statement for the edited field
+func saveFieldEdit(m appModel, newValue string) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		// Find the primary key column and value for the WHERE clause
+		var primaryKeyColumn, primaryKeyValue string
+		
+		// Look for common primary key column names
+		for i, col := range m.DataPreviewAllColumns {
+			if col == "id" || col == "Id" || col == "ID" {
+				if i < len(m.SelectedRowData) {
+					primaryKeyColumn = col
+					primaryKeyValue = m.SelectedRowData[i]
+					break
+				}
+			}
+		}
+		
+		// If no 'id' column found, try other common patterns
+		if primaryKeyColumn == "" {
+			for i, col := range m.DataPreviewAllColumns {
+				colLower := strings.ToLower(col)
+				if strings.HasSuffix(colLower, "_id") || strings.HasSuffix(colLower, "id") {
+					if i < len(m.SelectedRowData) {
+						primaryKeyColumn = col
+						primaryKeyValue = m.SelectedRowData[i]
+						break
+					}
+				}
+			}
+		}
+		
+		if primaryKeyColumn == "" {
+			return models.FieldUpdateResult{
+				Success:  false,
+				Err:      fmt.Errorf("no primary key column found for safe update"),
+				ExitEdit: false,
+			}
+		}
+		
+		// Build UPDATE SQL statement
+		var updateSQL string
+		switch m.SelectedDB.Driver {
+		case "postgres":
+			updateSQL = fmt.Sprintf(`UPDATE "%s"."%s" SET "%s" = $1 WHERE "%s" = $2`,
+				m.SelectedSchema, m.SelectedTable, m.EditingFieldName, primaryKeyColumn)
+		case "mysql":
+			updateSQL = fmt.Sprintf("UPDATE `%s`.`%s` SET `%s` = ? WHERE `%s` = ?",
+				m.SelectedSchema, m.SelectedTable, m.EditingFieldName, primaryKeyColumn)
+		case "sqlite3":
+			updateSQL = fmt.Sprintf(`UPDATE "%s" SET "%s" = ? WHERE "%s" = ?`,
+				m.SelectedTable, m.EditingFieldName, primaryKeyColumn)
+		default:
+			return models.FieldUpdateResult{
+				Success:  false,
+				Err:      fmt.Errorf("unsupported database driver: %s", m.SelectedDB.Driver),
+				ExitEdit: false,
+			}
+		}
+		
+		// Execute the UPDATE statement
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		
+		result, err := m.DB.ExecContext(ctx, updateSQL, newValue, primaryKeyValue)
+		if err != nil {
+			return models.FieldUpdateResult{
+				Success:  false,
+				Err:      fmt.Errorf("failed to update field: %v", err),
+				ExitEdit: false,
+			}
+		}
+		
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return models.FieldUpdateResult{
+				Success:  false,
+				Err:      fmt.Errorf("failed to get affected rows: %v", err),
+				ExitEdit: false,
+			}
+		}
+		
+		if rowsAffected == 0 {
+			return models.FieldUpdateResult{
+				Success:  false,
+				Err:      fmt.Errorf("no rows were updated - record may not exist"),
+				ExitEdit: false,
+			}
+		}
+		
+		return models.FieldUpdateResult{
+			Success:  true,
+			ExitEdit: true,
+			NewValue: newValue,
+		}
+	})
+}
 
 func updateSavedConnectionsList(m appModel) appModel {
 	savedItems := make([]list.Item, len(m.SavedConnections))

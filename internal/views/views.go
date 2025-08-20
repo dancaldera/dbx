@@ -657,7 +657,31 @@ func RowDetailView(m models.Model) string {
 		return styles.DocStyle.Render(content)
 	}
 
-	// Show field list view
+	// Show field list view or edit mode
+	if m.IsEditingField {
+		// Show simplified field editing interface
+		title := fmt.Sprintf("✏️ Edit Field: %s", m.EditingFieldName)
+		content := styles.TitleStyle.Render(title) + "\n\n"
+		
+		// Show status messages
+		if m.Err != nil {
+			content += styles.ErrorStyle.Render("❌ " + m.Err.Error()) + "\n\n"
+		} else if m.QueryResult != "" {
+			content += styles.SuccessStyle.Render(m.QueryResult) + "\n\n"
+		}
+		
+		// Only show the textarea for editing
+		content += m.FieldTextarea.View() + "\n\n"
+		
+		helpText := styles.HelpStyle.Render(
+			styles.KeyStyle.Render("Ctrl+S") + ": save changes • " +
+			styles.KeyStyle.Render("Esc") + ": cancel",
+		)
+		content += helpText
+		
+		return styles.DocStyle.Render(content)
+	}
+
 	title := fmt.Sprintf("📋 Row Details - %s", m.SelectedTable)
 	content := styles.TitleStyle.Render(title) + "\n"
 
@@ -667,6 +691,13 @@ func RowDetailView(m models.Model) string {
 		content += helpText
 		return styles.DocStyle.Render(content)
 	}
+	
+	// Show status messages
+	if m.Err != nil {
+		content += styles.ErrorStyle.Render("❌ " + m.Err.Error()) + "\n\n"
+	} else if m.QueryResult != "" {
+		content += styles.SuccessStyle.Render(m.QueryResult) + "\n\n"
+	}
 
 	// Show the list of fields
 	content += m.RowDetailList.View()
@@ -675,6 +706,7 @@ func RowDetailView(m models.Model) string {
 	helpText := styles.HelpStyle.Render(
 		styles.KeyStyle.Render("↑↓") + ": navigate fields • " +
 			styles.KeyStyle.Render("enter") + ": view field detail • " +
+			styles.KeyStyle.Render("e") + ": edit field • " +
 			styles.KeyStyle.Render("esc") + ": back to table",
 	)
 	content += "\n" + helpText

@@ -200,6 +200,8 @@ type Model struct {
 	FieldTextarea      textarea.Model
 	IsEditingField     bool
 	OriginalFieldValue string
+	EditingFieldName   string
+	EditingFieldIndex  int
 
 	// Index detail view
 	SelectedIndexName       string
