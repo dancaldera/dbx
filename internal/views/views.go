@@ -675,8 +675,8 @@ func RowDetailView(m models.Model) string {
 		
 		helpText := styles.HelpStyle.Render(
 			styles.KeyStyle.Render("Ctrl+S") + ": save changes • " +
-			styles.KeyStyle.Render("Esc") + ": cancel • " +
-			styles.KeyStyle.Render("Ctrl+K") + ": clear",
+			styles.KeyStyle.Render("Ctrl+K") + ": clear • " +
+			styles.KeyStyle.Render("Esc") + ": cancel",
 		)
 		content += helpText
 		
