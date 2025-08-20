@@ -620,7 +620,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							// Initialize the row detail list (full-width/height)
 							// Use custom delegate to show type badges aligned right
 							m.RowDetailList = list.New(items, fieldItemDelegate{}, 0, 0)
-							m.RowDetailList.Title = "Select a field to view its full content"
+							// Keep the outer view title; hide internal list title for cleaner look
+							m.RowDetailList.Title = ""
+							m.RowDetailList.SetShowTitle(false)
 							m.RowDetailList.SetShowStatusBar(false)
 							m.RowDetailList.SetFilteringEnabled(false)
 							// Hide built-in help to avoid duplicate help sections
@@ -1494,31 +1496,30 @@ func (d fieldItemDelegate) Render(w io.Writer, m list.Model, index int, it list.
 		return
 	}
 
-	// Determine type
+	// Determine type and simple prefix when selected
 	t := inferFieldType(fi.Value)
-	badge := styles.TypeBadgeStyle.Render("[" + t + "]")
-	badgeW := lipgloss.Width(badge)
-
-	// Single-line: Name: Value [Type]
-	name := fi.Name + ": "
+	prefix := "  "
 	if index == m.Index() {
-		name = styles.FocusedStyle.Render(name)
-	} else {
-		name = styles.InfoStyle.Render(name)
+		prefix = "> "
 	}
 
-	leftW := width - badgeW
-	if leftW < 0 {
-		leftW = 0
+	// Compose: prefix + Name: value [Type]
+	namePart := fi.Name + ": "
+	typePart := " [" + t + "]"
+
+	// Budget for value so type is always shown
+	budget := width - len(prefix) - len(namePart) - len(typePart)
+	if budget < 0 {
+		budget = 0
 	}
-	valueArea := leftW - 1 - lipgloss.Width(name)
-	if valueArea < 0 {
-		valueArea = 0
+	val := ansi.Truncate(fi.Value, budget, "...")
+
+	line := prefix + namePart + val + typePart
+
+	// Style when selected
+	if index == m.Index() {
+		line = styles.FocusedStyle.Render(line)
 	}
-	val := ansi.Truncate(fi.Value, valueArea, "...")
-	line := name + val
-	pad := max(0, width-badgeW-lipgloss.Width(line))
-	line = line + strings.Repeat(" ", pad) + badge
 	fmt.Fprint(w, line)
 }
 
