@@ -1,25 +1,40 @@
 # DBX - Database Explorer
 
-A terminal-based database explorer built with Go and Bubble Tea. DBX provides an interactive TUI for connecting to and exploring database structures across multiple database types.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go)](https://go.dev/dl/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Go Report Card](https://goreportcard.com/badge/github.com/danielcaldera/dbx)](https://goreportcard.com/report/github.com/danielcaldera/dbx)
 
-## Architecture
-
-DBX has been refactored from a monolithic structure into a clean, modular architecture with well-separated concerns:
-
-- **Configuration Management**: Persistent storage for connections and query history
-- **Database Operations**: Abstracted database interactions with support for PostgreSQL, MySQL, and SQLite
-- **Models & Types**: Clean type definitions and data structures
-- **UI Styling**: Consistent theming and visual design
-- **Modular Components**: Reusable and testable code organization
+A terminal-based database explorer built with Go and Bubble Tea. DBX provides an interactive TUI for connecting to and exploring database structures across PostgreSQL, MySQL, and SQLite databases.
 
 ## Features
 
 - **Multi-database support**: PostgreSQL, MySQL, and SQLite
 - **Interactive TUI**: Clean, keyboard-driven interface
-- **Database exploration**: Browse tables and view column details
-- **Connection management**: Save, edit, delete, and switch between database connections
+- **Connection management**: Save, edit, and switch between database connections
+- **Schema exploration**: Browse tables, views, columns, indexes, and relationships
 - **Data preview**: Quick view of table contents without writing SQL
-- **SQL query execution**: Run custom queries with formatted table results
+- **SQL query execution**: Run custom queries with formatted results
+- **Export functionality**: Export data to CSV and JSON formats
+- **Query history**: Save and recall previously executed queries
+
+## Architecture
+
+```
+dbx/
+├── main.go                     # Legacy main entry point
+├── cmd/dbx/                    # CLI entrypoint (preferred)
+├── internal/
+│   ├── config/                 # Configuration and file storage
+│   ├── database/               # Database operations and adapters
+│   ├── models/                 # Core types and interfaces
+│   ├── styles/                 # UI theming
+│   ├── ui/                     # Bubble Tea model initialization
+│   └── views/                  # UI view rendering
+```
+
+DBX follows a clean, modular architecture with well-separated concerns across configuration management, database operations, type definitions, UI styling, and component organization.
+
 
 ## Installation
 
@@ -31,7 +46,7 @@ DBX has been refactored from a monolithic structure into a clean, modular archit
 git clone <repository-url>
 cd dbx
 go mod tidy
-go build .
+go build -o dbx ./cmd/dbx
 ```
 
 ## Usage
@@ -41,25 +56,47 @@ Run the application:
 ./dbx
 ```
 
-### Navigation
-- **↑/↓**: Navigate through lists and tables
-- **Enter**: Select item or confirm action
-- **Esc**: Go back to previous screen
-- **p**: Preview table data (first 10 rows)
-- **r**: Run custom SQL query
-- **i**: View indexes and constraints (from columns view)
-- **f**: View foreign key relationships (from tables view)
-- **Ctrl+F** or **/**: Search tables (in tables view) or columns (in columns view)
-- **Ctrl+H**: Access query history (in query view)
-- **d**: Delete saved connection (in saved connections view) or query history entry (in query history view)
-- **F1**: Test database connection (in connection view)
-- **F2**: Validate, save and connect to database (in connection view)
-- **s**: Save database connection (from tables view)
-- **e**: Edit saved connection (in saved connections view)
-- **d**: Delete saved connection (in saved connections view)
-- **Ctrl+E**: Export query results or table preview to CSV
-- **Ctrl+J**: Export query results or table preview to JSON
-- **q** or **Ctrl+C**: Quit application
+Or run directly with Go:
+```bash
+go run ./cmd/dbx
+```
+
+### Navigation Controls
+
+| Key | Action |
+|-----|--------|
+| **↑/↓** | Navigate through lists and tables |
+| **Enter** | Select item or confirm action |
+| **Esc** | Go back to previous screen |
+| **q** or **Ctrl+C** | Quit application |
+
+### Data Operations
+
+| Key | Action |
+|-----|--------|
+| **p** | Preview table data (first 10 rows) |
+| **r** | Run custom SQL query |
+| **i** | View indexes and constraints |
+| **f** | View foreign key relationships |
+| **Ctrl+F** or **/** | Search tables or columns |
+| **Ctrl+H** | Access query history |
+
+### Connection Management
+
+| Key | Action |
+|-----|--------|
+| **s** | Save database connection |
+| **e** | Edit saved connection |
+| **d** | Delete saved connection or query |
+| **F1** | Test database connection |
+| **F2** | Validate, save and connect |
+
+### Export Options
+
+| Key | Action |
+|-----|--------|
+| **Ctrl+E** | Export to CSV |
+| **Ctrl+J** | Export to JSON |
 
 ### Connection Strings
 
@@ -87,135 +124,38 @@ username:password@tcp(localhost:3306)/database_name
 5. **Run Queries**: Execute custom SQL queries with formatted table results
 6. **Export Data**: Export query results or table previews to CSV/JSON format
 
-## Schema Support
+## Database Features
 
-DBX provides comprehensive schema support for PostgreSQL databases:
-
-### PostgreSQL Schema Features
-- **Automatic Detection**: Detects all available schemas in PostgreSQL databases
-- **Schema Selection**: When multiple schemas exist, presents a selection interface
-- **Schema Navigation**: Browse tables within specific schemas
-- **Schema Information**: Displays schema names in table listings for non-public schemas
-
-### Schema Workflow
-1. **Single Schema**: If only one schema exists (usually `public`), proceeds directly to table listing
-2. **Multiple Schemas**: Shows schema selection screen with descriptions
-3. **Schema Selection**: Choose schema to explore its tables and structure
-4. **Schema Context**: All subsequent table operations work within the selected schema
-
-### Supported Schemas
-- **PostgreSQL**: Full schema support with selection interface
-- **MySQL**: Uses database-level organization (no schema selection needed)
+### Schema Support
+- **PostgreSQL**: Full schema support with automatic detection and selection interface
+- **MySQL**: Database-level organization (no schema selection needed)
 - **SQLite**: Uses default `main` schema
 
-## View Support
+### Views and Tables
+- Views are marked with 👁️, tables with 📊
+- Full column structure browsing for both tables and views
+- Data preview functionality for quick content inspection
 
-DBX provides comprehensive view support across all supported database types:
+### Indexes and Constraints
+- Complete index information (primary keys, unique indexes, regular indexes)
+- Constraint details (foreign keys, primary keys, check constraints)
+- Visual organization with type, affected columns, and full definitions
 
-### Database View Features
-- **View Detection**: Automatically detects and displays database views alongside tables
-- **Visual Distinction**: Views are marked with 👁️ emoji, tables with 📊 emoji
-- **Cross-Database Support**: Works with PostgreSQL, MySQL, and SQLite views
+### Foreign Key Relationships
+- Comprehensive relationship visualization across all tables
+- Shows source/target tables and columns with constraint names
+- Cross-database support for all relationship types
 
-### View Workflow
-1. **View Listing**: Views appear in the table listing with distinct visual indicators
-2. **View Selection**: Select views the same way as tables using arrow keys and Enter
-3. **View Columns**: View column structure the same way as tables
-4. **View Preview**: Preview view data the same way as table data
+### Connection Validation
+- Pre-save connection testing with 10-second timeout
+- Database-specific error messages with troubleshooting hints
+- Format validation for connection strings
 
-## Export Functionality
-
-DBX supports exporting query results and table previews to multiple formats:
-
-### Export Formats
-- **CSV**: Comma-separated values format with headers
-- **JSON**: JavaScript Object Notation format as an array of objects
-
-### Export Usage
-- **From Query Results**: After executing a query, press `Ctrl+E` for CSV or `Ctrl+J` for JSON
-- **From Table Preview**: When viewing table data preview, press `Ctrl+E` for CSV or `Ctrl+J` for JSON
-
-### Export Files
-- Files are saved in the current working directory
-- Automatic filename generation includes timestamps
-- Query results: `query_result_YYYYMMDD_HHMMSS.csv/json`
-- Table previews: `tablename_YYYYMMDD_HHMMSS.csv/json`
-
-## Index and Constraint Information
-
-DBX provides comprehensive index and constraint information for all supported database types:
-
-### Index and Constraint Features
-- **Index Display**: Shows all indexes on a table including primary keys, unique indexes, and regular indexes
-- **Constraint Information**: Displays table constraints including foreign keys, primary keys, and check constraints
-- **Cross-Database Support**: Works with PostgreSQL, MySQL, and SQLite databases
-- **Visual Organization**: Displays index type, affected columns, and full definition
-
-### Index and Constraint Workflow
-1. **Navigate to Columns**: Select a table and view its column structure
-2. **Access Index View**: Press `i` to view indexes and constraints for the current table
-3. **Review Information**: Browse through all indexes and constraints with their details
-4. **Navigate Back**: Press `Esc` to return to the columns view
-
-### Supported Information
-- **PostgreSQL**: Full index and constraint support including schema-aware queries
-- **MySQL**: Index statistics and constraint information from information_schema
-- **SQLite**: Pragma-based index information and foreign key constraints
-
-### Index Display Columns
-- **Index Name**: The name of the index or constraint
-- **Type**: Index type (PRIMARY, UNIQUE, INDEX) or constraint type (FOREIGN KEY, etc.)
-- **Columns**: Which table columns are affected by the index or constraint
-- **Definition**: Full SQL definition or description of the index or constraint
-
-## Foreign Key Relationships
-
-DBX provides comprehensive foreign key relationship visualization across all supported database types:
-
-### Foreign Key Features
-- **Relationship Display**: Shows all foreign key relationships between tables in the database
-- **Cross-Database Support**: Works with PostgreSQL, MySQL, and SQLite databases
-- **Comprehensive Information**: Displays source table, source column, target table, target column, and constraint name
-- **Easy Navigation**: Access from tables view to see all database relationships at once
-
-### Foreign Key Workflow
-1. **Navigate to Tables**: Connect to a database and view the tables listing
-2. **Access Relationships**: Press `f` to view all foreign key relationships in the database
-3. **Review Relationships**: Browse through all foreign key constraints with their details
-4. **Navigate Back**: Press `Esc` to return to the tables view
-
-### Supported Databases
-- **PostgreSQL**: Full foreign key support using information_schema queries
-- **MySQL**: Foreign key relationships from INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-- **SQLite**: Foreign key information using PRAGMA foreign_key_list for each table
-
-### Relationship Display Columns
-- **From Table**: The table that contains the foreign key
-- **From Column**: The column in the source table that references another table
-- **To Table**: The table being referenced by the foreign key
-- **To Column**: The column in the target table being referenced
-- **Constraint Name**: The name of the foreign key constraint
-
-## Connection Validation
-
-DBX includes comprehensive connection validation to ensure reliable database connections:
-
-### Features
-- **Pre-save validation**: Connections are automatically tested before being saved
-- **Enhanced error messages**: Clear, database-specific error descriptions
-- **Connection timeout**: 10-second timeout prevents hanging on unreachable servers
-- **Format validation**: Connection string format is validated for each database type
-
-### Validation Process
-1. **F1 - Test Connection**: Manually test a connection without saving
-2. **F2 - Validate & Save**: Automatically tests connection, then saves if successful
-3. **Real-time feedback**: Loading indicators and clear success/error messages
-4. **Smart error handling**: Database-specific error messages with troubleshooting hints
-
-### Enhanced Error Messages
-- **PostgreSQL**: Server connection, authentication, database existence, and timeout errors
-- **MySQL**: Server connection, access denied, unknown database, and timeout errors  
-- **SQLite**: File existence, permissions, and database lock errors
+### Export Capabilities
+- **CSV**: Comma-separated values with headers
+- **JSON**: Array of objects format
+- Automatic timestamped filenames
+- Export from query results or table previews
 
 ## Dependencies
 
@@ -228,23 +168,32 @@ DBX includes comprehensive connection validation to ensure reliable database con
 
 ### Build
 ```bash
-go build .
+go build -o dbx ./cmd/dbx
 ```
 
 ### Run
 ```bash
-go run .
+go run ./cmd/dbx
 ```
 
-### Format code
+### Development Commands
 ```bash
+# Install dependencies
+go mod tidy
+
+# Format code
 go fmt ./...
+
+# Static analysis
+go vet ./...
+
+# Run tests
+go test ./...
 ```
 
-### Vet for issues
-```bash
-go vet ./...
-```
+## Contributing
+
+Contributions are welcome! Please review `CONTRIBUTING.md` for guidelines on setting up your environment, coding style, testing, and submitting pull requests.
 
 ## MVP Roadmap
 
@@ -290,15 +239,11 @@ go vet ./...
 
 ## Code Quality Standards
 
-### File Size Limit
-- **All source files must be less than 500 lines** to maintain code readability and modularity across time
-- If a file approaches 500 lines, consider refactoring into smaller, focused modules
-- This helps ensure:
-  - Better code maintainability
-  - Easier code reviews
-  - Improved testability
-  - Clear separation of concerns
+- **File size limit**: All source files must be under 500 lines
+- **Separation of concerns**: Clear module boundaries and responsibilities
+- **Testing**: Tests alongside code as `*_test.go` files
+- **Formatting**: Follow standard Go formatting (`go fmt`)
 
 ## License
 
-This project is licensed under the MIT License - see the [MIT License](https://opensource.org/licenses/MIT) for details.
+MIT License © 2025 Daniel Caldera. See `LICENSE` for details.
