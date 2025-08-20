@@ -9,51 +9,98 @@
   - `models/` (core types and state)
   - `styles/` (theme/styling)
   - `ui/` (Bubble Tea models initialization)
-  - `views/` (UI view rendering functions)
-- Root `main.go`: current main entry point with application logic
+  - `views/` (UI view rendering)
+- Root `main.go`: current main with app logic.
+- Tests: alongside code as `*_test.go`.
+
+## Project Overview
+- App: DBX — a terminal-based database explorer (Go TUI).
+- Databases: PostgreSQL, MySQL, SQLite (tables and views supported).
+- State-driven UI: selection, connection, schema, tables, columns, query, history.
+
+## Architecture
+```
+dbx/
+├── main.go                     # Main application entry point
+├── cmd/dbx/                    # CLI entrypoint
+├── internal/
+│   ├── config/                 # Configuration and file storage
+│   ├── database/               # Database operations and adapters
+│   ├── models/                 # Core types and interfaces
+│   ├── styles/                 # UI theming
+│   ├── ui/                     # Bubble Tea model initialization
+│   └── views/                  # UI view rendering
+```
+- Core states: `dbTypeView`, `connectionView`, `schemaView`, `tablesView`, `columnsView`, `queryView`, `queryHistoryView`.
+- Package roles: `config` (persistence), `database` (queries), `models` (types), `styles` (theme), `ui` (init), `views` (rendering).
+- Key deps: `bubbletea`, `bubbles`, `lipgloss`; DB drivers: `lib/pq`, `go-sql-driver/mysql`, `mattn/go-sqlite3`.
 
 ## Build, Test, and Development
-- Install deps: `go mod tidy`
-- Build binary: `go build -o dbx ./cmd/dbx` (or `go build .` if using root)
-- Run locally: `go run ./cmd/dbx` or `./dbx`
-- Format: `go fmt ./...`
-- Vet: `go vet ./...`
-- Tests: `go test ./...` (table-driven tests preferred)
+- Install deps: `go mod tidy`.
+- Build binary: `go build -o dbx ./cmd/dbx` (or `go build .`).
+- Run locally: `go run ./cmd/dbx` or `./dbx`.
+- Format code: `go fmt ./...`; keep imports organized.
+- Static checks: `go vet ./...`.
+- Run tests: `go test ./...` (use `-run` to scope).
+
+### Additional Dev Commands
+- Update deps: `go mod download`.
+
+## Application Flow
+1. Choose DB type or select a saved connection.
+2. Enter connection string (per driver) if new.
+3. Connect, load schemas (PostgreSQL), then tables and views.
+4. Navigate to columns, run queries, and browse history.
+
+## Connection & Schema Support
+- Connections file: `~/.dbx/connections.json`.
+- Save/load: press `s` in connection/main views.
+- PostgreSQL schemas: auto-detected; prompt when multiple exist; operations scoped to selection.
+
+## View Support
+- Views listed with 👁️, tables with 📊; supported across PostgreSQL, MySQL, SQLite.
 
 ## Coding Style & Naming Conventions
-- Formatting: standard Go tooling (`go fmt`); keep imports organized.
-- Packages: short, all-lowercase names (no underscores or camelCase).
+- Language: Go; follow standard tooling output (`go fmt`).
+- Packages: short, lowercase names (no underscores or camelCase).
 - Files: `snake_case.go` by feature (e.g., `operations.go`, `storage.go`).
-- Exports: `CamelCase` for exported, `lowerCamel` for unexported.
-- Errors: wrap with context (`fmt.Errorf("op failed: %w", err)`); return early.
-- Boundaries: UI in `ui`, DB logic in `database`, shared types in `models`.
+- Exports: `CamelCase`; unexported: `lowerCamel`.
+- Errors: wrap with context (e.g., `fmt.Errorf("op failed: %w", err)`).
+- Separation: UI in `ui`, DB in `database`, shared types in `models`.
+- File size: keep each source file under 500 lines; refactor when approaching.
+
+## Navigation Controls
+- Arrows: navigate lists/tables; `Enter`: select; `Esc`: back.
+- `s`: saved connections (menu) / save current (connection view); `n`: new connection.
+- `p`: preview table data; `r`: run SQL; `Ctrl+H`: query history.
+- `i`: indexes/constraints; `f`: foreign keys; `/` or `Ctrl+F`: search.
+- `F1`: test connection; `F2`: validate, save, connect; `Ctrl+E`: export CSV; `Ctrl+J`: export JSON.
+- `q` or `Ctrl+C`: quit.
 
 ## Testing Guidelines
-- Framework: standard `testing` package.
-- Location: alongside code as `*_test.go` (e.g., `internal/database/operations_test.go`).
-- Style: table-driven tests; prefer deterministic fixtures over live DB.
-- Run: `go test ./...` (consider `-run` to scope while iterating).
+- Framework: standard `testing` package; table-driven tests preferred.
+- Determinism: use fixtures over live DB connections.
+- Location: tests live next to code as `*_test.go`.
+- Run: `go test ./...`; add focused runs with `-run`.
+
+## Database Connection Examples
+- PostgreSQL: `postgres://user:password@localhost/dbname?sslmode=disable`
+- MySQL: `user:password@tcp(localhost:3306)/dbname`
+- SQLite: `/path/to/database.db`
 
 ## Commit & Pull Request Guidelines
-- Commits: imperative mood, concise subject (≤72 chars), details in body if needed.
+- Commits: imperative mood, concise subject (≤72 chars).
   - Examples: `Implement PostgreSQL schema selection`, `Fix input focus in connection view`.
-- PRs: clear description, linked issues, test notes/steps, and screenshots for UI changes.
-- Scope: keep PRs focused; update `README.md` when behavior or commands change.
+- PRs: clear description, linked issues, test notes/steps, screenshots for UI changes.
+- Scope: keep focused; update `README.md` when behavior or commands change.
+
+## Known Issues
+- None currently; app builds and runs successfully.
 
 ## Security & Configuration Tips
 - Do not commit credentials or real connection strings; use placeholders.
-- Avoid committing build artifacts (e.g., `dbx`). Add to `.gitignore` if needed.
+- Avoid committing build artifacts (e.g., `dbx`); ensure `.gitignore` covers them.
 - Prefer environment variables or local config for sensitive values during development.
 
 ## Code Quality Standards
-
-### File Size Limit
-- **All source files must be less than 500 lines** to maintain code readability and modularity across time
-- If a file approaches 500 lines, consider refactoring into smaller, focused modules
-- This helps ensure:
-  - Better code maintainability
-  - Easier code reviews
-  - Improved testability
-  - Clear separation of concerns
-- When refactoring large files, preserve functionality and follow the existing modular architecture patterns
-
+- File size limit: keep all source files under 500 lines; refactor when approaching to maintain readability, testability, and clear separation of concerns.
