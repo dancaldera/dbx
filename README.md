@@ -208,12 +208,18 @@ username:password@tcp(localhost:3306)/database_name
 
 ### Build
 ```bash
-go build -o dbx ./cmd/dbx
+go build
 ```
 
 ### Run
 ```bash
-go run ./cmd/dbx
+go run main.go
+```
+
+### Run Production
+```bash
+chmod +x ./dbx
+./dbx
 ```
 
 ### Development Commands
