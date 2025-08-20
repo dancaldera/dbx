@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
@@ -1504,7 +1505,7 @@ func (d fieldItemDelegate) Render(w io.Writer, m list.Model, index int, it list.
 	if nameW < 0 {
 		nameW = 0
 	}
-	name = lipgloss.Truncate(name, nameW)
+	name = ansi.Truncate(name, nameW, "...")
 	space1 := strings.Repeat(" ", max(0, width-badgeW-lipgloss.Width(name)))
 
 	// Selected state styling
@@ -1522,7 +1523,7 @@ func (d fieldItemDelegate) Render(w io.Writer, m list.Model, index int, it list.
 		valW = 0
 	}
 	// Show single-line preview; full content available with enter
-	val = lipgloss.Truncate(val, valW)
+	val = ansi.Truncate(val, valW, "...")
 	space2 := strings.Repeat(" ", max(0, width-badgeW-lipgloss.Width(val)))
 
 	// Second line
