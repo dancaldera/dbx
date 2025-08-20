@@ -176,6 +176,22 @@ type Model struct {
 	SelectedIndexType       string
 	SelectedIndexColumns    string
 	SelectedIndexDefinition string
+
+	// Data preview pagination
+	DataPreviewCurrentPage int
+	DataPreviewItemsPerPage int
+	DataPreviewTotalRows    int
+
+	// Data preview horizontal scrolling
+	DataPreviewScrollOffset int    // Current column offset
+	DataPreviewVisibleCols  int    // Number of columns visible at once
+	DataPreviewAllColumns   []string // Store all column names
+	DataPreviewAllRows      [][]string // Store all row data
+
+	// Data preview filtering
+	DataPreviewFilterActive bool   // Whether filter mode is active
+	DataPreviewFilterValue  string // Current filter text
+	DataPreviewFilterInput  textinput.Model // Filter input field
 }
 
 // Message types for Bubble Tea
@@ -205,9 +221,10 @@ type QueryResult struct {
 }
 
 type DataPreviewResult struct {
-	Columns []string
-	Rows    [][]string
-	Err     error
+	Columns   []string
+	Rows      [][]string
+	Err       error
+	TotalRows int
 }
 
 type IndexesResult struct {

@@ -1,8 +1,8 @@
 package styles
 
 import (
-    "github.com/charmbracelet/bubbles/table"
-    "github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Global styles with magenta theme
@@ -21,19 +21,19 @@ var (
 	ErrorRed      = lipgloss.Color("#EF4444")
 	WarningOrange = lipgloss.Color("#F59E0B")
 
-    // Main title style used in content views
-    TitleStyle = lipgloss.NewStyle().
-            Foreground(PrimaryMagenta).
-            Padding(0, 1).
-            Margin(0, 0, 1, 0).
-            Bold(true)
+	// Main title style used in content views
+	TitleStyle = lipgloss.NewStyle().
+			Foreground(PrimaryMagenta).
+			Padding(0, 1).
+			Margin(0, 0, 1, 0).
+			Bold(true)
 
-    // List header title style (looser spacing)
-    ListTitleStyle = lipgloss.NewStyle().
-            Foreground(PrimaryMagenta).
-            Padding(0, 1).
-            Margin(0, 0, 1, 0).
-            Bold(true)
+	// List header title style (looser spacing)
+	ListTitleStyle = lipgloss.NewStyle().
+			Foreground(PrimaryMagenta).
+			Padding(0, 1).
+			Margin(0, 0, 1, 0).
+			Bold(true)
 
 	// Subtitle for sections
 	SubtitleStyle = lipgloss.NewStyle().
@@ -41,77 +41,77 @@ var (
 			Bold(true).
 			Margin(0, 0, 1, 0)
 
-    // Invisible/transparent-like border to keep layout spacing without drawing lines
-    TransparentBorder = lipgloss.Border{
-            Top:        " ",
-            Bottom:     " ",
-            Left:       " ",
-            Right:      " ",
-            TopLeft:    " ",
-            TopRight:   " ",
-            BottomLeft: " ",
-            BottomRight:" ",
-    }
+	// Invisible/transparent-like border to keep layout spacing without drawing lines
+	TransparentBorder = lipgloss.Border{
+		Top:         " ",
+		Bottom:      " ",
+		Left:        " ",
+		Right:       " ",
+		TopLeft:     " ",
+		TopRight:    " ",
+		BottomLeft:  " ",
+		BottomRight: " ",
+	}
 
-    // Focused/selected item style
-    FocusedStyle = lipgloss.NewStyle().
-            Foreground(AccentMagenta).
-            Padding(0, 1).
-            Bold(true).
-            Border(TransparentBorder)
+	// Focused/selected item style
+	FocusedStyle = lipgloss.NewStyle().
+			Foreground(AccentMagenta).
+			Padding(0, 1).
+			Bold(true).
+			Border(TransparentBorder)
 
-	// Input field styling
-    InputStyle = lipgloss.NewStyle().
-            Border(TransparentBorder).
-            Padding(0, 1).
-            Margin(0, 0, 1, 0)
+		// Input field styling
+	InputStyle = lipgloss.NewStyle().
+			Border(TransparentBorder).
+			Padding(0, 1).
+			Margin(0, 0, 1, 0)
 
-	// Input field when focused
-    InputFocusedStyle = lipgloss.NewStyle().
-                Border(TransparentBorder).
-                Padding(0, 1).
-                Margin(0, 0, 1, 0)
+		// Input field when focused
+	InputFocusedStyle = lipgloss.NewStyle().
+				Border(TransparentBorder).
+				Padding(0, 1).
+				Margin(0, 0, 1, 0)
 
-	// Help text style
-    HelpStyle = lipgloss.NewStyle().
-            Foreground(LightGray).
-            Italic(true).
-            Margin(1, 0).
-            Border(TransparentBorder).
-            Padding(0, 1)
+		// Help text style
+	HelpStyle = lipgloss.NewStyle().
+			Foreground(LightGray).
+			Italic(true).
+			Margin(1, 0).
+			Border(TransparentBorder).
+			Padding(0, 1)
 
 	// Key binding help style
 	KeyStyle = lipgloss.NewStyle().
 			Foreground(AccentMagenta).
 			Bold(true)
 
-	// Error messages
-    ErrorStyle = lipgloss.NewStyle().
-            Foreground(ErrorRed).
-            Padding(0, 1).
-            Bold(true).
-            Border(TransparentBorder)
+		// Error messages
+	ErrorStyle = lipgloss.NewStyle().
+			Foreground(ErrorRed).
+			Padding(0, 1).
+			Bold(true).
+			Border(TransparentBorder)
 
-	// Success messages
-    SuccessStyle = lipgloss.NewStyle().
-            Foreground(SuccessGreen).
-            Padding(0, 1).
-            Bold(true).
-            Border(TransparentBorder)
+		// Success messages
+	SuccessStyle = lipgloss.NewStyle().
+			Foreground(SuccessGreen).
+			Padding(0, 1).
+			Bold(true).
+			Border(TransparentBorder)
 
-	// Warning messages
-    WarningStyle = lipgloss.NewStyle().
-            Foreground(WarningOrange).
-            Padding(0, 1).
-            Bold(true).
-            Border(TransparentBorder)
+		// Warning messages
+	WarningStyle = lipgloss.NewStyle().
+			Foreground(WarningOrange).
+			Padding(0, 1).
+			Bold(true).
+			Border(TransparentBorder)
 
-	// Information boxes
-    InfoStyle = lipgloss.NewStyle().
-            Foreground(DarkMagenta).
-            Padding(1, 2).
-            Border(TransparentBorder).
-            Margin(0, 0, 1, 0)
+		// Information boxes
+	InfoStyle = lipgloss.NewStyle().
+			Foreground(DarkMagenta).
+			Padding(0, 1).
+			Border(TransparentBorder).
+			Margin(0)
 
 	// Table header style
 	TableHeaderStyle = lipgloss.NewStyle().
@@ -122,14 +122,14 @@ var (
 
 	// Main document container
 	DocStyle = lipgloss.NewStyle().
-			Margin(2, 2).
-			Padding(1)
+			Margin(1, 2).
+			Padding(0)
 
-	// Card-like container for sections
-    CardStyle = lipgloss.NewStyle().
-            Border(TransparentBorder).
-            Padding(1, 2).
-            Margin(0, 0, 1, 0)
+		// Card-like container for sections
+	CardStyle = lipgloss.NewStyle().
+			Border(TransparentBorder).
+			Padding(1, 2).
+			Margin(0, 0, 1, 0)
 
 	// Loading indicator style
 	LoadingStyle = lipgloss.NewStyle().
@@ -140,15 +140,15 @@ var (
 
 // GetMagentaTableStyles returns table styles with magenta theme
 func GetMagentaTableStyles() table.Styles {
-    s := table.DefaultStyles()
-    s.Header = s.Header.
-        Foreground(DarkMagenta).
-        Bold(true).
-        Align(lipgloss.Center)
-    s.Selected = s.Selected.
-        Foreground(AccentMagenta).
-        Bold(true)
-    s.Cell = s.Cell.
-        Padding(0, 1)
-    return s
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		Foreground(DarkMagenta).
+		Bold(true).
+		Align(lipgloss.Center)
+	s.Selected = s.Selected.
+		Foreground(AccentMagenta).
+		Bold(true)
+	s.Cell = s.Cell.
+		Padding(0, 1)
+	return s
 }

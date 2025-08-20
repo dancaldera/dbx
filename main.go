@@ -152,6 +152,11 @@ func initialModel() models.Model {
 	ta.SetWidth(80)
 	ta.SetHeight(20)
 
+	// Initialize filter input
+	filterInput := textinput.New()
+	filterInput.Placeholder = "Type to filter all columns..."
+	filterInput.Width = 60
+
 	m := models.Model{
 		State:                   models.DBTypeView,
 		DBTypeList:              dbList,
@@ -178,6 +183,9 @@ func initialModel() models.Model {
 		DataPreviewTotalRows:    0,   // Will be set when loading data
 		DataPreviewScrollOffset: 0,   // Start at first column
 		DataPreviewVisibleCols:  6,   // Show 6 columns at once
+		DataPreviewFilterActive: false, // Start without filter
+		DataPreviewFilterValue:  "",    // No initial filter
+		DataPreviewFilterInput:  filterInput, // Filter input component
 	}
 
 	return m
@@ -432,7 +440,36 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ColumnsTable, cmd = m.ColumnsTable.Update(msg)
 	case models.DataPreviewView:
 		if km, ok := msg.(tea.KeyMsg); ok {
+			// Handle filter mode
+			if m.DataPreviewFilterActive {
+				switch km.String() {
+				case "enter":
+					// Apply filter
+					m.DataPreviewFilterValue = m.DataPreviewFilterInput.Value()
+					m.DataPreviewFilterActive = false
+					m.DataPreviewFilterInput.Blur()
+					m.DataPreviewCurrentPage = 0 // Reset to first page
+					return m, loadDataPreviewWithFilter(m)
+				case "esc":
+					// Cancel filter
+					m.DataPreviewFilterActive = false
+					m.DataPreviewFilterInput.Blur()
+					m.DataPreviewFilterInput.SetValue("")
+					return m, nil
+				default:
+					// Update filter input
+					m.DataPreviewFilterInput, cmd = m.DataPreviewFilterInput.Update(msg)
+					return m, cmd
+				}
+			}
+
+			// Normal navigation mode
 			switch km.String() {
+			case "/":
+				// Start filter mode
+				m.DataPreviewFilterActive = true
+				m.DataPreviewFilterInput.Focus()
+				return m, nil
 			case "r":
 				return m, loadDataPreview(m)
 			case "left":
@@ -642,8 +679,26 @@ func loadDataPreview(m appModel) tea.Cmd {
 func loadDataPreviewWithPagination(m appModel) tea.Cmd {
 	return tea.Cmd(func() tea.Msg {
 		offset := m.DataPreviewCurrentPage * m.DataPreviewItemsPerPage
+		if m.DataPreviewFilterValue != "" {
+			cols, rows, err := database.GetTablePreviewPaginatedWithFilter(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, offset, m.DataPreviewFilterValue, m.DataPreviewAllColumns)
+			return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: m.DataPreviewTotalRows}
+		}
 		cols, rows, err := database.GetTablePreviewPaginated(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, offset)
 		return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: m.DataPreviewTotalRows}
+	})
+}
+
+func loadDataPreviewWithFilter(m appModel) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		// Get total rows with filter
+		totalRows, err := database.GetTableRowCountWithFilter(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewFilterValue, m.DataPreviewAllColumns)
+		if err != nil {
+			return models.DataPreviewResult{Columns: nil, Rows: nil, Err: err}
+		}
+		
+		// Get filtered data
+		cols, rows, err := database.GetTablePreviewPaginatedWithFilter(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, 0, m.DataPreviewFilterValue, m.DataPreviewAllColumns)
+		return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: totalRows}
 	})
 }
 

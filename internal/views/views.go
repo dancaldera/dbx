@@ -201,18 +201,18 @@ func TablesView(m models.Model) string {
 		emptyMsg := styles.InfoStyle.Render("📋 No tables found in this database.")
 		elements = append(elements, m.TablesList.View())
 		elements = append(elements, emptyMsg)
-    } else {
-        // Show tables list without success banner
-        elements = append(elements, m.TablesList.View())
-    }
+	} else {
+		// Show tables list without success banner
+		elements = append(elements, m.TablesList.View())
+	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, elements...)
 
-    helpText := styles.HelpStyle.Render(
-        styles.KeyStyle.Render("enter") + ": preview data • " +
-            styles.KeyStyle.Render("v") + ": view columns • " +
-            styles.KeyStyle.Render("f") + ": relationships • " +
-            styles.KeyStyle.Render("esc") + ": disconnect")
+	helpText := styles.HelpStyle.Render(
+		styles.KeyStyle.Render("enter") + ": preview data • " +
+			styles.KeyStyle.Render("v") + ": view columns • " +
+			styles.KeyStyle.Render("f") + ": relationships • " +
+			styles.KeyStyle.Render("esc") + ": disconnect")
 
 	return styles.DocStyle.Render(content + "\n" + helpText)
 }
@@ -327,31 +327,86 @@ func QueryHistoryView(m models.Model) string {
 
 // DataPreviewView renders the table data preview screen
 func DataPreviewView(m models.Model) string {
-	content := styles.TitleStyle.Render(fmt.Sprintf("Data Preview: %s", m.SelectedTable)) + "\n\n"
+	// Add title with table name
+	title := fmt.Sprintf("📊 %s", m.SelectedTable)
+	content := styles.TitleStyle.Render(title)
 
 	// Show status messages (loading, success, error)
 	if m.IsExporting {
-		content += "⏳ Exporting data..." + "\n\n"
+		content += "\n⏳ Exporting data..."
 	} else if m.Err != nil {
-		content += styles.ErrorStyle.Render("❌ Error: "+m.Err.Error()) + "\n\n"
+		content += "\n" + styles.ErrorStyle.Render("❌ Error: "+m.Err.Error())
 	} else if m.QueryResult != "" {
-		content += styles.SuccessStyle.Render(m.QueryResult) + "\n\n"
+		content += "\n" + styles.SuccessStyle.Render(m.QueryResult)
 	}
 
 	// Only show the table if it has both columns and rows
 	if len(m.DataPreviewTable.Columns()) > 0 && len(m.DataPreviewTable.Rows()) > 0 {
-		content += styles.InfoStyle.Render(fmt.Sprintf("Showing first 10 rows from %s", m.SelectedTable)) + "\n\n"
-		content += m.DataPreviewTable.View()
+		// Calculate pagination info
+		totalPages := (m.DataPreviewTotalRows + m.DataPreviewItemsPerPage - 1) / m.DataPreviewItemsPerPage
+		if totalPages == 0 {
+			totalPages = 1
+		}
+		currentPage := m.DataPreviewCurrentPage + 1 // Display as 1-based
+		
+		// Calculate current row range
+		startRow := (m.DataPreviewCurrentPage * m.DataPreviewItemsPerPage) + 1
+		endRow := startRow + len(m.DataPreviewTable.Rows()) - 1
+		
+		// Show table information
+		var tableInfo string
+		if m.DataPreviewFilterValue != "" {
+			tableInfo = fmt.Sprintf("Table: %s (filtered: '%s') • Rows %d-%d of %d • Page %d/%d", 
+				m.SelectedTable, m.DataPreviewFilterValue, startRow, endRow, m.DataPreviewTotalRows, currentPage, totalPages)
+		} else {
+			tableInfo = fmt.Sprintf("Table: %s • Rows %d-%d of %d • Page %d/%d", 
+				m.SelectedTable, startRow, endRow, m.DataPreviewTotalRows, currentPage, totalPages)
+		}
+		content += "\n" + tableInfo
+		
+		// Show column scroll indicator
+		totalCols := len(m.DataPreviewAllColumns)
+		startCol := m.DataPreviewScrollOffset + 1 // 1-based for display
+		endCol := m.DataPreviewScrollOffset + m.DataPreviewVisibleCols
+		if endCol > totalCols {
+			endCol = totalCols
+		}
+		
+		visibleRows := len(m.DataPreviewTable.Rows())
+		columnInfo := fmt.Sprintf("Columns %d-%d of %d • %d rows visible", 
+			startCol, endCol, totalCols, visibleRows)
+		content += "\n" + columnInfo
+
+		// Show filter input if active
+		if m.DataPreviewFilterActive {
+			filterLabel := "🔍 Filter:"
+			var filterField string
+			if m.DataPreviewFilterInput.Focused() {
+				filterField = styles.InputFocusedStyle.Render(m.DataPreviewFilterInput.View())
+			} else {
+				filterField = styles.InputStyle.Render(m.DataPreviewFilterInput.View())
+			}
+			content += "\n" + filterLabel + " " + filterField
+		}
+		
+		content += "\n" + m.DataPreviewTable.View()
 	} else if m.Err == nil && m.QueryResult == "" && !m.IsExporting {
-		content += styles.InfoStyle.Render("No data to display")
+		content += "\n" + "No data to display"
 	}
 
-	helpText := styles.HelpStyle.Render(
-		styles.KeyStyle.Render("enter") + ": view row details • " +
-			styles.KeyStyle.Render("r") + ": reload • " +
-			styles.KeyStyle.Render("Ctrl+E") + ": export CSV • " +
-			styles.KeyStyle.Render("Ctrl+J") + ": export JSON • " +
-			styles.KeyStyle.Render("esc") + ": back to tables")
+	var helpText string
+	if m.DataPreviewFilterActive {
+		helpText = styles.HelpStyle.Render(
+			styles.KeyStyle.Render("enter") + ": apply filter • " +
+				styles.KeyStyle.Render("esc") + ": cancel filter")
+	} else {
+		helpText = styles.HelpStyle.Render(
+			styles.KeyStyle.Render("hjkl") + ": navigate • " +
+				styles.KeyStyle.Render("←/→") + ": prev/next page • " +
+				styles.KeyStyle.Render("/") + ": filter • " +
+				styles.KeyStyle.Render("r") + ": reload • " +
+				styles.KeyStyle.Render("esc") + ": back")
+	}
 
 	content += "\n" + helpText
 	return styles.DocStyle.Render(content)
