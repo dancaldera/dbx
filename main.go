@@ -180,7 +180,7 @@ func initialModel() models.Model {
 		FieldDetailCharsPerLine: 120,         // Show 120 characters per line in field detail view
 		FieldTextarea:           ta,          // Initialize textarea for field editing
 		DataPreviewCurrentPage:  0,           // Start at first page
-		DataPreviewItemsPerPage: 25,          // Show 25 items per page
+        DataPreviewItemsPerPage: 40,          // Show 40 items per page
 		DataPreviewTotalRows:    0,           // Will be set when loading data
 		DataPreviewScrollOffset: 0,           // Start at first column
 		DataPreviewVisibleCols:  6,           // Show 6 columns at once
