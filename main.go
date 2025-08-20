@@ -705,9 +705,13 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							break
 						}
 					}
-					// Calculate max scroll based on field content
+					// Calculate max scroll based on field content and dynamic height
 					lines := len(strings.Split(fieldValue, "\n"))
-					maxScroll := lines - m.FieldDetailLinesPerPage
+					availableHeight := m.Height - 10 // Same calculation as in view
+					if availableHeight < 5 {
+						availableHeight = 5
+					}
+					maxScroll := lines - availableHeight
 					if maxScroll < 0 {
 						maxScroll = 0
 					}

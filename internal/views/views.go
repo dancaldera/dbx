@@ -578,9 +578,15 @@ func RowDetailView(m models.Model) string {
 		// Split content into lines for scrolling
 		lines := strings.Split(fieldValue, "\n")
 
+		// Calculate dynamic height (use window height minus padding for title and help text)
+		availableHeight := m.Height - 10 // Reserve space for title, help text, and margins
+		if availableHeight < 5 {
+			availableHeight = 5 // Minimum height
+		}
+
 		// Calculate visible range
 		startLine := m.FieldDetailScrollOffset
-		endLine := startLine + m.FieldDetailLinesPerPage
+		endLine := startLine + availableHeight
 		if endLine > len(lines) {
 			endLine = len(lines)
 		}
@@ -638,7 +644,7 @@ func RowDetailView(m models.Model) string {
 		}
 
 		// Render with dynamic dimensions
-		contentBox := styles.InputStyle.Width(availableWidth).Height(m.FieldDetailLinesPerPage).Render(displayContent)
+		contentBox := styles.InputStyle.Width(availableWidth).Height(availableHeight).Render(displayContent)
 
 		helpText := styles.HelpStyle.Render(
 			styles.KeyStyle.Render("↑↓/jk") + ": scroll vertical • " +
