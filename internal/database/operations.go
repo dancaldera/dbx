@@ -463,6 +463,11 @@ func GetTableRowCount(db *sql.DB, driver, tableName, schema string) (int, error)
 
 // GetTablePreviewPaginated returns paginated rows from a table/view with column names
 func GetTablePreviewPaginated(db *sql.DB, driver, tableName, schema string, limit, offset int) ([]string, [][]string, error) {
+	return GetTablePreviewPaginatedWithSort(db, driver, tableName, schema, limit, offset, "", "")
+}
+
+// GetTablePreviewPaginatedWithSort returns paginated rows from a table/view with column names and optional sorting
+func GetTablePreviewPaginatedWithSort(db *sql.DB, driver, tableName, schema string, limit, offset int, sortColumn, sortDirection string) ([]string, [][]string, error) {
 	if limit <= 0 {
 		limit = 10
 	}
@@ -471,16 +476,28 @@ func GetTablePreviewPaginated(db *sql.DB, driver, tableName, schema string, limi
 	}
 
 	var query string
+	var orderBy string
+	if sortColumn != "" && sortDirection != "" {
+		switch driver {
+		case "postgres":
+			orderBy = fmt.Sprintf(" ORDER BY \"%s\" %s", sortColumn, sortDirection)
+		case "mysql":
+			orderBy = fmt.Sprintf(" ORDER BY `%s` %s", sortColumn, sortDirection)
+		case "sqlite3":
+			orderBy = fmt.Sprintf(" ORDER BY \"%s\" %s", sortColumn, sortDirection)
+		}
+	}
+
 	switch driver {
 	case "postgres":
 		if schema == "" {
 			schema = "public"
 		}
-		query = fmt.Sprintf("SELECT * FROM \"%s\".\"%s\" LIMIT %d OFFSET %d", schema, tableName, limit, offset)
+		query = fmt.Sprintf("SELECT * FROM \"%s\".\"%s\"%s LIMIT %d OFFSET %d", schema, tableName, orderBy, limit, offset)
 	case "mysql":
-		query = fmt.Sprintf("SELECT * FROM `%s` LIMIT %d OFFSET %d", tableName, limit, offset)
+		query = fmt.Sprintf("SELECT * FROM `%s`%s LIMIT %d OFFSET %d", tableName, orderBy, limit, offset)
 	case "sqlite3":
-		query = fmt.Sprintf("SELECT * FROM \"%s\" LIMIT %d OFFSET %d", tableName, limit, offset)
+		query = fmt.Sprintf("SELECT * FROM \"%s\"%s LIMIT %d OFFSET %d", tableName, orderBy, limit, offset)
 	default:
 		return nil, nil, fmt.Errorf("unsupported driver: %s", driver)
 	}
@@ -574,8 +591,13 @@ func GetTableRowCountWithFilter(db *sql.DB, driver, tableName, schema, filterVal
 
 // GetTablePreviewPaginatedWithFilter returns paginated rows from a table/view with filter applied
 func GetTablePreviewPaginatedWithFilter(db *sql.DB, driver, tableName, schema string, limit, offset int, filterValue string, columns []string) ([]string, [][]string, error) {
+	return GetTablePreviewPaginatedWithFilterAndSort(db, driver, tableName, schema, limit, offset, filterValue, columns, "", "")
+}
+
+// GetTablePreviewPaginatedWithFilterAndSort returns paginated rows from a table/view with filter and sort applied
+func GetTablePreviewPaginatedWithFilterAndSort(db *sql.DB, driver, tableName, schema string, limit, offset int, filterValue string, columns []string, sortColumn, sortDirection string) ([]string, [][]string, error) {
 	if filterValue == "" {
-		return GetTablePreviewPaginated(db, driver, tableName, schema, limit, offset)
+		return GetTablePreviewPaginatedWithSort(db, driver, tableName, schema, limit, offset, sortColumn, sortDirection)
 	}
 
 	if limit <= 0 {
@@ -583,6 +605,18 @@ func GetTablePreviewPaginatedWithFilter(db *sql.DB, driver, tableName, schema st
 	}
 	if offset < 0 {
 		offset = 0
+	}
+
+	var orderBy string
+	if sortColumn != "" && sortDirection != "" {
+		switch driver {
+		case "postgres":
+			orderBy = fmt.Sprintf(" ORDER BY \"%s\" %s", sortColumn, sortDirection)
+		case "mysql":
+			orderBy = fmt.Sprintf(" ORDER BY `%s` %s", sortColumn, sortDirection)
+		case "sqlite3":
+			orderBy = fmt.Sprintf(" ORDER BY \"%s\" %s", sortColumn, sortDirection)
+		}
 	}
 
 	var query string
@@ -597,7 +631,7 @@ func GetTablePreviewPaginatedWithFilter(db *sql.DB, driver, tableName, schema st
 			whereConditions[i] = fmt.Sprintf("(\"%s\"::TEXT ILIKE '%%%s%%')", col, filterValue)
 		}
 		whereClause := strings.Join(whereConditions, " OR ")
-		query = fmt.Sprintf("SELECT * FROM \"%s\".\"%s\" WHERE %s LIMIT %d OFFSET %d", schema, tableName, whereClause, limit, offset)
+		query = fmt.Sprintf("SELECT * FROM \"%s\".\"%s\" WHERE %s%s LIMIT %d OFFSET %d", schema, tableName, whereClause, orderBy, limit, offset)
 	case "mysql":
 		// Build WHERE clause with OR conditions for each column
 		whereConditions := make([]string, len(columns))
@@ -605,7 +639,7 @@ func GetTablePreviewPaginatedWithFilter(db *sql.DB, driver, tableName, schema st
 			whereConditions[i] = fmt.Sprintf("(CAST(`%s` AS CHAR) LIKE '%%%s%%')", col, filterValue)
 		}
 		whereClause := strings.Join(whereConditions, " OR ")
-		query = fmt.Sprintf("SELECT * FROM `%s` WHERE %s LIMIT %d OFFSET %d", tableName, whereClause, limit, offset)
+		query = fmt.Sprintf("SELECT * FROM `%s` WHERE %s%s LIMIT %d OFFSET %d", tableName, whereClause, orderBy, limit, offset)
 	case "sqlite3":
 		// Build WHERE clause with OR conditions for each column
 		whereConditions := make([]string, len(columns))
@@ -613,7 +647,7 @@ func GetTablePreviewPaginatedWithFilter(db *sql.DB, driver, tableName, schema st
 			whereConditions[i] = fmt.Sprintf("(CAST(\"%s\" AS TEXT) LIKE '%%%s%%')", col, filterValue)
 		}
 		whereClause := strings.Join(whereConditions, " OR ")
-		query = fmt.Sprintf("SELECT * FROM \"%s\" WHERE %s LIMIT %d OFFSET %d", tableName, whereClause, limit, offset)
+		query = fmt.Sprintf("SELECT * FROM \"%s\" WHERE %s%s LIMIT %d OFFSET %d", tableName, whereClause, orderBy, limit, offset)
 	default:
 		return nil, nil, fmt.Errorf("unsupported driver: %s", driver)
 	}

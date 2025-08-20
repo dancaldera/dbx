@@ -33,6 +33,15 @@ const (
 	RelationshipsView
 )
 
+// Sort directions
+type SortDirection int
+
+const (
+	SortOff SortDirection = iota
+	SortAsc
+	SortDesc
+)
+
 // Database types
 type DBType struct {
 	Name   string
@@ -178,20 +187,25 @@ type Model struct {
 	SelectedIndexDefinition string
 
 	// Data preview pagination
-	DataPreviewCurrentPage int
+	DataPreviewCurrentPage  int
 	DataPreviewItemsPerPage int
 	DataPreviewTotalRows    int
 
 	// Data preview horizontal scrolling
-	DataPreviewScrollOffset int    // Current column offset
-	DataPreviewVisibleCols  int    // Number of columns visible at once
-	DataPreviewAllColumns   []string // Store all column names
+	DataPreviewScrollOffset int        // Current column offset
+	DataPreviewVisibleCols  int        // Number of columns visible at once
+	DataPreviewAllColumns   []string   // Store all column names
 	DataPreviewAllRows      [][]string // Store all row data
 
 	// Data preview filtering
-	DataPreviewFilterActive bool   // Whether filter mode is active
-	DataPreviewFilterValue  string // Current filter text
+	DataPreviewFilterActive bool            // Whether filter mode is active
+	DataPreviewFilterValue  string          // Current filter text
 	DataPreviewFilterInput  textinput.Model // Filter input field
+
+	// Data preview sorting
+	DataPreviewSortColumn    string        // Column to sort by
+	DataPreviewSortDirection SortDirection // Current sort direction
+	DataPreviewSortMode      bool          // Whether in column selection mode for sorting
 }
 
 // Message types for Bubble Tea

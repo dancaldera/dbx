@@ -348,22 +348,32 @@ func DataPreviewView(m models.Model) string {
 			totalPages = 1
 		}
 		currentPage := m.DataPreviewCurrentPage + 1 // Display as 1-based
-		
+
 		// Calculate current row range
 		startRow := (m.DataPreviewCurrentPage * m.DataPreviewItemsPerPage) + 1
 		endRow := startRow + len(m.DataPreviewTable.Rows()) - 1
-		
+
 		// Show table information
 		var tableInfo string
+		var sortInfo string
+		if m.DataPreviewSortColumn != "" {
+			switch m.DataPreviewSortDirection {
+			case models.SortAsc:
+				sortInfo = fmt.Sprintf(" • Sorted by %s ↑", m.DataPreviewSortColumn)
+			case models.SortDesc:
+				sortInfo = fmt.Sprintf(" • Sorted by %s ↓", m.DataPreviewSortColumn)
+			}
+		}
+
 		if m.DataPreviewFilterValue != "" {
-			tableInfo = fmt.Sprintf("Table: %s (filtered: '%s') • Rows %d-%d of %d • Page %d/%d", 
-				m.SelectedTable, m.DataPreviewFilterValue, startRow, endRow, m.DataPreviewTotalRows, currentPage, totalPages)
+			tableInfo = fmt.Sprintf("Table: %s (filtered: '%s') • Rows %d-%d of %d • Page %d/%d%s",
+				m.SelectedTable, m.DataPreviewFilterValue, startRow, endRow, m.DataPreviewTotalRows, currentPage, totalPages, sortInfo)
 		} else {
-			tableInfo = fmt.Sprintf("Table: %s • Rows %d-%d of %d • Page %d/%d", 
-				m.SelectedTable, startRow, endRow, m.DataPreviewTotalRows, currentPage, totalPages)
+			tableInfo = fmt.Sprintf("Table: %s • Rows %d-%d of %d • Page %d/%d%s",
+				m.SelectedTable, startRow, endRow, m.DataPreviewTotalRows, currentPage, totalPages, sortInfo)
 		}
 		content += "\n" + tableInfo
-		
+
 		// Show column scroll indicator
 		totalCols := len(m.DataPreviewAllColumns)
 		startCol := m.DataPreviewScrollOffset + 1 // 1-based for display
@@ -371,9 +381,9 @@ func DataPreviewView(m models.Model) string {
 		if endCol > totalCols {
 			endCol = totalCols
 		}
-		
+
 		visibleRows := len(m.DataPreviewTable.Rows())
-		columnInfo := fmt.Sprintf("Columns %d-%d of %d • %d rows visible", 
+		columnInfo := fmt.Sprintf("Columns %d-%d of %d • %d rows visible",
 			startCol, endCol, totalCols, visibleRows)
 		content += "\n" + columnInfo
 
@@ -389,6 +399,17 @@ func DataPreviewView(m models.Model) string {
 			content += "\n" + filterLabel + " " + filterField
 		}
 		
+		// Show sort mode indicator if active
+		if m.DataPreviewSortMode {
+			var sortModeInfo string
+			if m.DataPreviewSortColumn != "" {
+				sortModeInfo = fmt.Sprintf("🔄 Sort Mode: Column '%s' selected", m.DataPreviewSortColumn)
+			} else {
+				sortModeInfo = "🔄 Sort Mode: Select column with ↑/↓"
+			}
+			content += "\n" + styles.InfoStyle.Render(sortModeInfo)
+		}
+
 		content += "\n" + m.DataPreviewTable.View()
 	} else if m.Err == nil && m.QueryResult == "" && !m.IsExporting {
 		content += "\n" + "No data to display"
@@ -399,11 +420,17 @@ func DataPreviewView(m models.Model) string {
 		helpText = styles.HelpStyle.Render(
 			styles.KeyStyle.Render("enter") + ": apply filter • " +
 				styles.KeyStyle.Render("esc") + ": cancel filter")
+	} else if m.DataPreviewSortMode {
+		helpText = styles.HelpStyle.Render(
+			styles.KeyStyle.Render("↑/↓") + ": select column • " +
+				styles.KeyStyle.Render("enter") + ": toggle sort (off→asc→desc→off) • " +
+				styles.KeyStyle.Render("esc") + ": exit sort mode")
 	} else {
 		helpText = styles.HelpStyle.Render(
 			styles.KeyStyle.Render("hjkl") + ": navigate • " +
 				styles.KeyStyle.Render("←/→") + ": prev/next page • " +
 				styles.KeyStyle.Render("/") + ": filter • " +
+				styles.KeyStyle.Render("s") + ": sort columns • " +
 				styles.KeyStyle.Render("r") + ": reload • " +
 				styles.KeyStyle.Render("esc") + ": back")
 	}

@@ -172,19 +172,19 @@ func initialModel() models.Model {
 		SavedConnections:        savedConnections,
 		QueryHistory:            queryHistory,
 		EditingConnectionIdx:    -1,
-		RowDetailItemsPerPage:   8,   // Show 8 fields per page
-		FullTextLinesPerPage:    20,  // Show 20 lines per page in full text view
-		FullTextItemsPerPage:    5,   // Show 5 fields per page in full text view
-		FieldDetailLinesPerPage: 25,  // Show 25 lines per page in field detail view
-		FieldDetailCharsPerLine: 120, // Show 120 characters per line in field detail view
-		FieldTextarea:           ta,  // Initialize textarea for field editing
-		DataPreviewCurrentPage:  0,   // Start at first page
-		DataPreviewItemsPerPage: 25,  // Show 25 items per page
-		DataPreviewTotalRows:    0,   // Will be set when loading data
-		DataPreviewScrollOffset: 0,   // Start at first column
-		DataPreviewVisibleCols:  6,   // Show 6 columns at once
-		DataPreviewFilterActive: false, // Start without filter
-		DataPreviewFilterValue:  "",    // No initial filter
+		RowDetailItemsPerPage:   8,           // Show 8 fields per page
+		FullTextLinesPerPage:    20,          // Show 20 lines per page in full text view
+		FullTextItemsPerPage:    5,           // Show 5 fields per page in full text view
+		FieldDetailLinesPerPage: 25,          // Show 25 lines per page in field detail view
+		FieldDetailCharsPerLine: 120,         // Show 120 characters per line in field detail view
+		FieldTextarea:           ta,          // Initialize textarea for field editing
+		DataPreviewCurrentPage:  0,           // Start at first page
+		DataPreviewItemsPerPage: 25,          // Show 25 items per page
+		DataPreviewTotalRows:    0,           // Will be set when loading data
+		DataPreviewScrollOffset: 0,           // Start at first column
+		DataPreviewVisibleCols:  6,           // Show 6 columns at once
+		DataPreviewFilterActive: false,       // Start without filter
+		DataPreviewFilterValue:  "",          // No initial filter
 		DataPreviewFilterInput:  filterInput, // Filter input component
 	}
 
@@ -463,12 +463,72 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+			// Handle sort mode
+			if m.DataPreviewSortMode {
+				switch km.String() {
+				case "up", "k":
+					// Move to previous column
+					currentIdx := -1
+					for i, col := range m.DataPreviewAllColumns {
+						if col == m.DataPreviewSortColumn {
+							currentIdx = i
+							break
+						}
+					}
+					if currentIdx > 0 {
+						m.DataPreviewSortColumn = m.DataPreviewAllColumns[currentIdx-1]
+					}
+					return m, nil
+				case "down", "j":
+					// Move to next column
+					currentIdx := -1
+					for i, col := range m.DataPreviewAllColumns {
+						if col == m.DataPreviewSortColumn {
+							currentIdx = i
+							break
+						}
+					}
+					if currentIdx >= 0 && currentIdx < len(m.DataPreviewAllColumns)-1 {
+						m.DataPreviewSortColumn = m.DataPreviewAllColumns[currentIdx+1]
+					} else if currentIdx == -1 && len(m.DataPreviewAllColumns) > 0 {
+						m.DataPreviewSortColumn = m.DataPreviewAllColumns[0]
+					}
+					return m, nil
+				case "enter":
+					// Toggle sort direction: off -> asc -> desc -> off
+					switch m.DataPreviewSortDirection {
+					case models.SortOff:
+						m.DataPreviewSortDirection = models.SortAsc
+					case models.SortAsc:
+						m.DataPreviewSortDirection = models.SortDesc
+					case models.SortDesc:
+						m.DataPreviewSortDirection = models.SortOff
+						m.DataPreviewSortColumn = ""
+					}
+					m.DataPreviewSortMode = false
+					m.DataPreviewCurrentPage = 0 // Reset to first page when sorting changes
+					return m, loadDataPreviewWithSort(m)
+				case "esc":
+					// Exit sort mode
+					m.DataPreviewSortMode = false
+					return m, nil
+				}
+				return m, nil
+			}
+
 			// Normal navigation mode
 			switch km.String() {
 			case "/":
 				// Start filter mode
 				m.DataPreviewFilterActive = true
 				m.DataPreviewFilterInput.Focus()
+				return m, nil
+			case "s":
+				// Start sort mode
+				m.DataPreviewSortMode = true
+				if m.DataPreviewSortColumn == "" && len(m.DataPreviewAllColumns) > 0 {
+					m.DataPreviewSortColumn = m.DataPreviewAllColumns[0] // Start with first column
+				}
 				return m, nil
 			case "r":
 				return m, loadDataPreview(m)
@@ -497,7 +557,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "l":
 				// Scroll right (show next columns)
 				totalCols := len(m.DataPreviewAllColumns)
-				if m.DataPreviewScrollOffset + m.DataPreviewVisibleCols < totalCols {
+				if m.DataPreviewScrollOffset+m.DataPreviewVisibleCols < totalCols {
 					m.DataPreviewScrollOffset++
 					m = createDataPreviewTable(m)
 				}
@@ -670,20 +730,44 @@ func loadDataPreview(m appModel) tea.Cmd {
 		if err != nil {
 			return models.DataPreviewResult{Columns: nil, Rows: nil, Err: err}
 		}
-		
-		cols, rows, err := database.GetTablePreviewPaginated(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, 0)
+
+		// Determine sort parameters
+		var sortColumn, sortDirection string
+		if m.DataPreviewSortDirection != models.SortOff && m.DataPreviewSortColumn != "" {
+			sortColumn = m.DataPreviewSortColumn
+			switch m.DataPreviewSortDirection {
+			case models.SortAsc:
+				sortDirection = "ASC"
+			case models.SortDesc:
+				sortDirection = "DESC"
+			}
+		}
+
+		cols, rows, err := database.GetTablePreviewPaginatedWithSort(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, 0, sortColumn, sortDirection)
 		return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: totalRows}
 	})
 }
 
 func loadDataPreviewWithPagination(m appModel) tea.Cmd {
 	return tea.Cmd(func() tea.Msg {
+		// Determine sort parameters
+		var sortColumn, sortDirection string
+		if m.DataPreviewSortDirection != models.SortOff && m.DataPreviewSortColumn != "" {
+			sortColumn = m.DataPreviewSortColumn
+			switch m.DataPreviewSortDirection {
+			case models.SortAsc:
+				sortDirection = "ASC"
+			case models.SortDesc:
+				sortDirection = "DESC"
+			}
+		}
+
 		offset := m.DataPreviewCurrentPage * m.DataPreviewItemsPerPage
 		if m.DataPreviewFilterValue != "" {
-			cols, rows, err := database.GetTablePreviewPaginatedWithFilter(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, offset, m.DataPreviewFilterValue, m.DataPreviewAllColumns)
+			cols, rows, err := database.GetTablePreviewPaginatedWithFilterAndSort(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, offset, m.DataPreviewFilterValue, m.DataPreviewAllColumns, sortColumn, sortDirection)
 			return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: m.DataPreviewTotalRows}
 		}
-		cols, rows, err := database.GetTablePreviewPaginated(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, offset)
+		cols, rows, err := database.GetTablePreviewPaginatedWithSort(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, offset, sortColumn, sortDirection)
 		return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: m.DataPreviewTotalRows}
 	})
 }
@@ -695,10 +779,49 @@ func loadDataPreviewWithFilter(m appModel) tea.Cmd {
 		if err != nil {
 			return models.DataPreviewResult{Columns: nil, Rows: nil, Err: err}
 		}
-		
-		// Get filtered data
-		cols, rows, err := database.GetTablePreviewPaginatedWithFilter(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, 0, m.DataPreviewFilterValue, m.DataPreviewAllColumns)
+
+		// Determine sort parameters
+		var sortColumn, sortDirection string
+		if m.DataPreviewSortDirection != models.SortOff && m.DataPreviewSortColumn != "" {
+			sortColumn = m.DataPreviewSortColumn
+			switch m.DataPreviewSortDirection {
+			case models.SortAsc:
+				sortDirection = "ASC"
+			case models.SortDesc:
+				sortDirection = "DESC"
+			}
+		}
+
+		// Get filtered and sorted data
+		cols, rows, err := database.GetTablePreviewPaginatedWithFilterAndSort(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, 0, m.DataPreviewFilterValue, m.DataPreviewAllColumns, sortColumn, sortDirection)
 		return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: totalRows}
+	})
+}
+
+func loadDataPreviewWithSort(m appModel) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		// Determine sort parameters
+		var sortColumn, sortDirection string
+		if m.DataPreviewSortDirection != models.SortOff && m.DataPreviewSortColumn != "" {
+			sortColumn = m.DataPreviewSortColumn
+			switch m.DataPreviewSortDirection {
+			case models.SortAsc:
+				sortDirection = "ASC"
+			case models.SortDesc:
+				sortDirection = "DESC"
+			}
+		}
+
+		offset := m.DataPreviewCurrentPage * m.DataPreviewItemsPerPage
+
+		// Use appropriate function based on whether filter is active
+		if m.DataPreviewFilterValue != "" {
+			cols, rows, err := database.GetTablePreviewPaginatedWithFilterAndSort(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, offset, m.DataPreviewFilterValue, m.DataPreviewAllColumns, sortColumn, sortDirection)
+			return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: m.DataPreviewTotalRows}
+		} else {
+			cols, rows, err := database.GetTablePreviewPaginatedWithSort(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, offset, sortColumn, sortDirection)
+			return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: m.DataPreviewTotalRows}
+		}
 	})
 }
 
@@ -708,17 +831,17 @@ func handleDataPreviewResult(m appModel, msg models.DataPreviewResult) (appModel
 		m.Err = msg.Err
 		return m, nil
 	}
-	
+
 	// Update total rows count
 	if msg.TotalRows > 0 {
 		m.DataPreviewTotalRows = msg.TotalRows
 	}
-	
+
 	// Store all columns and rows for horizontal scrolling
 	m.DataPreviewAllColumns = msg.Columns
 	m.DataPreviewAllRows = msg.Rows
 	m.DataPreviewScrollOffset = 0 // Reset scroll position
-	
+
 	// Create the initial table view
 	m = createDataPreviewTable(m)
 	m.State = models.DataPreviewView
@@ -729,14 +852,14 @@ func createDataPreviewTable(m appModel) appModel {
 	if len(m.DataPreviewAllColumns) == 0 {
 		return m
 	}
-	
+
 	// Calculate visible column range
 	startCol := m.DataPreviewScrollOffset
 	endCol := startCol + m.DataPreviewVisibleCols
 	if endCol > len(m.DataPreviewAllColumns) {
 		endCol = len(m.DataPreviewAllColumns)
 	}
-	
+
 	// Build visible columns with dynamic width
 	visibleCols := m.DataPreviewAllColumns[startCol:endCol]
 	cols := make([]table.Column, len(visibleCols))
@@ -763,7 +886,7 @@ func createDataPreviewTable(m appModel) appModel {
 		}
 		cols[i] = table.Column{Title: c, Width: maxWidth}
 	}
-	
+
 	// Build visible rows with content truncation
 	rows := make([]table.Row, len(m.DataPreviewAllRows))
 	for i, r := range m.DataPreviewAllRows {
@@ -783,7 +906,7 @@ func createDataPreviewTable(m appModel) appModel {
 		}
 		rows[i] = visibleCells
 	}
-	
+
 	// Recreate table with visible columns/rows
 	m.DataPreviewTable = table.New(
 		table.WithColumns(cols),
@@ -792,10 +915,9 @@ func createDataPreviewTable(m appModel) appModel {
 		table.WithHeight(26),
 	)
 	m.DataPreviewTable.SetStyles(styles.GetMagentaTableStyles())
-	
+
 	return m
 }
-
 
 func loadRelationships(m appModel) tea.Cmd {
 	return tea.Cmd(func() tea.Msg {
