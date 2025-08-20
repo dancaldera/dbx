@@ -33,7 +33,7 @@ func InitialModel() models.Model {
 		}
 	}
 
-	dbList := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	dbList := list.New(items, styles.GetBlueListDelegate(), 0, 0)
     dbList.Title = "DBX — Database Explorer"
 	// Remove any default title background and apply our title style
 	ls := list.DefaultStyles()
@@ -51,7 +51,7 @@ func InitialModel() models.Model {
 	queryHistory, _ := config.LoadQueryHistory()
 
 	// Saved connections list
-	savedConnectionsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
+	savedConnectionsList := list.New([]list.Item{}, styles.GetBlueListDelegate(), 50, 20)
     savedConnectionsList.Title = "Saved Connections"
 	// Transparent title bar for saved connections
 	scLS := list.DefaultStyles()
@@ -102,7 +102,7 @@ func InitialModel() models.Model {
 	si.Width = 80
 
 	// Tables list (compact: names only, no extra spacing)
-	tblDelegate := list.NewDefaultDelegate()
+	tblDelegate := styles.GetBlueListDelegate()
 	tblDelegate.ShowDescription = false
 	tblDelegate.SetSpacing(0)
 	tablesList := list.New([]list.Item{}, tblDelegate, 0, 0)
@@ -130,7 +130,7 @@ func InitialModel() models.Model {
 		table.WithHeight(10),
 	)
 
-	t.SetStyles(styles.GetMagentaTableStyles())
+	t.SetStyles(styles.GetBlueTableStyles())
 
 	// Query results table
 	queryResultsTable := table.New(
@@ -138,7 +138,7 @@ func InitialModel() models.Model {
 		table.WithFocused(true),
 		table.WithHeight(10),
 	)
-	queryResultsTable.SetStyles(styles.GetMagentaTableStyles())
+	queryResultsTable.SetStyles(styles.GetBlueTableStyles())
 
 	// Data preview table
 	dataPreviewTable := table.New(
@@ -146,7 +146,7 @@ func InitialModel() models.Model {
 		table.WithFocused(true),
 		table.WithHeight(10),
 	)
-	dataPreviewTable.SetStyles(styles.GetMagentaTableStyles())
+	dataPreviewTable.SetStyles(styles.GetBlueTableStyles())
 
 	// Indexes table
 	indexesTable := table.New(
@@ -159,7 +159,7 @@ func InitialModel() models.Model {
 		table.WithFocused(true),
 		table.WithHeight(10),
 	)
-	indexesTable.SetStyles(styles.GetMagentaTableStyles())
+	indexesTable.SetStyles(styles.GetBlueTableStyles())
 
 	// Relationships table
 	relationshipsTable := table.New(
@@ -173,12 +173,12 @@ func InitialModel() models.Model {
 		table.WithFocused(true),
 		table.WithHeight(10),
 	)
-	relationshipsTable.SetStyles(styles.GetMagentaTableStyles())
+	relationshipsTable.SetStyles(styles.GetBlueTableStyles())
 
 	// Initialize spinner
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(styles.AccentMagenta)
+	s.Style = lipgloss.NewStyle().Foreground(styles.AccentBlue)
 
 	// Initialize textarea for field editing
 	ta := textarea.New()
@@ -187,7 +187,7 @@ func InitialModel() models.Model {
 	ta.SetHeight(20)
 
 	// Query history list
-	queryHistoryList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
+	queryHistoryList := list.New([]list.Item{}, styles.GetBlueListDelegate(), 50, 20)
     queryHistoryList.Title = "Query History"
 	// Transparent title bar for query history
 	qhLS := list.DefaultStyles()
@@ -199,7 +199,7 @@ func InitialModel() models.Model {
 	queryHistoryList.SetShowHelp(false)
 
 	// Schemas list
-	schemasList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
+	schemasList := list.New([]list.Item{}, styles.GetBlueListDelegate(), 50, 20)
     schemasList.Title = "Database Schemas"
 	// Transparent title bar for schemas
 	schLS := list.DefaultStyles()

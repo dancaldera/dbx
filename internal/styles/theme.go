@@ -1,17 +1,18 @@
 package styles
 
 import (
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Global styles with magenta theme
+// Global styles with blue theme
 var (
-	// Primary magenta colors
-	PrimaryMagenta = lipgloss.Color("#D946EF") // Main magenta
-	LightMagenta   = lipgloss.Color("#F3E8FF") // Light magenta background
-	DarkMagenta    = lipgloss.Color("#7C2D91") // Dark magenta
-	AccentMagenta  = lipgloss.Color("#A855F7") // Purple accent
+	// Primary blue colors
+	PrimaryBlue = lipgloss.Color("#00b8db") // Main blue
+	LightBlue   = lipgloss.Color("#53eafd") // Light blue
+	DarkBlue    = lipgloss.Color("#008ba3") // Dark cyan-blue accent
+	AccentBlue  = lipgloss.Color("#29d3ea") // Cyan accent
 
 	// Supporting colors
 	DarkGray      = lipgloss.Color("#374151")
@@ -23,21 +24,21 @@ var (
 
 	// Main title style used in content views
 	TitleStyle = lipgloss.NewStyle().
-			Foreground(PrimaryMagenta).
+			Foreground(PrimaryBlue).
 			Padding(0, 1).
 			Margin(0, 0, 1, 0).
 			Bold(true)
 
 	// List header title style (looser spacing)
 	ListTitleStyle = lipgloss.NewStyle().
-			Foreground(PrimaryMagenta).
+			Foreground(PrimaryBlue).
 			Padding(0, 1).
 			Margin(0, 0, 1, 0).
 			Bold(true)
 
 	// Subtitle for sections
 	SubtitleStyle = lipgloss.NewStyle().
-			Foreground(DarkMagenta).
+			Foreground(DarkBlue).
 			Bold(true).
 			Margin(0, 0, 1, 0)
 
@@ -55,7 +56,7 @@ var (
 
 	// Focused/selected item style
 	FocusedStyle = lipgloss.NewStyle().
-			Foreground(AccentMagenta).
+			Foreground(AccentBlue).
 			Padding(0, 1).
 			Bold(true).
 			Border(TransparentBorder)
@@ -82,7 +83,7 @@ var (
 
 	// Key binding help style
 	KeyStyle = lipgloss.NewStyle().
-			Foreground(AccentMagenta).
+			Foreground(AccentBlue).
 			Bold(true)
 
 		// Error messages
@@ -108,14 +109,14 @@ var (
 
 		// Information boxes
 	InfoStyle = lipgloss.NewStyle().
-			Foreground(DarkMagenta).
+			Foreground(DarkBlue).
 			Padding(0, 1).
 			Border(TransparentBorder).
 			Margin(0)
 
 	// Table header style
 	TableHeaderStyle = lipgloss.NewStyle().
-				Foreground(DarkMagenta).
+				Foreground(DarkBlue).
 				Bold(true).
 				Padding(0, 1).
 				Align(lipgloss.Center)
@@ -133,27 +134,48 @@ var (
 
 	// Loading indicator style
 	LoadingStyle = lipgloss.NewStyle().
-			Foreground(AccentMagenta).
+			Foreground(AccentBlue).
 			Bold(true).
 			Italic(true)
 
 	// Type badge style for row details
 	TypeBadgeStyle = lipgloss.NewStyle().
-		Foreground(AccentMagenta).
+		Foreground(AccentBlue).
 		Bold(true)
 )
 
-// GetMagentaTableStyles returns table styles with magenta theme
-func GetMagentaTableStyles() table.Styles {
+// GetBlueTableStyles returns table styles with blue theme
+func GetBlueTableStyles() table.Styles {
 	s := table.DefaultStyles()
 	s.Header = s.Header.
-		Foreground(DarkMagenta).
+		Foreground(DarkBlue).
 		Bold(true).
 		Align(lipgloss.Center)
 	s.Selected = s.Selected.
-		Foreground(AccentMagenta).
+		Foreground(AccentBlue).
 		Bold(true)
 	s.Cell = s.Cell.
 		Padding(0, 1)
 	return s
+}
+
+// GetBlueListDelegate returns a list delegate with blue theme
+func GetBlueListDelegate() list.DefaultDelegate {
+	d := list.NewDefaultDelegate()
+	d.Styles.SelectedTitle = lipgloss.NewStyle().
+		Foreground(PrimaryBlue).
+		Bold(true).
+		Border(lipgloss.ThickBorder(), false, false, false, true).
+		BorderForeground(AccentBlue).
+		Padding(0, 0, 0, 1)
+	d.Styles.SelectedDesc = lipgloss.NewStyle().
+		Foreground(DarkBlue).
+		Border(lipgloss.ThickBorder(), false, false, false, true).
+		BorderForeground(AccentBlue).
+		Padding(0, 0, 0, 1)
+	d.Styles.DimmedTitle = lipgloss.NewStyle().
+		Foreground(LightGray)
+	d.Styles.DimmedDesc = lipgloss.NewStyle().
+		Foreground(LightGray)
+	return d
 }

@@ -46,7 +46,7 @@ func initialModel() models.Model {
 		}
 	}
 
-	dbList := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	dbList := list.New(items, styles.GetBlueListDelegate(), 0, 0)
 	dbList.Title = "DBX — Database Explorer"
 	// Remove any default title background and apply our title style
 	ls := list.DefaultStyles()
@@ -64,7 +64,7 @@ func initialModel() models.Model {
 	queryHistory, _ := config.LoadQueryHistory()
 
 	// Saved connections list
-	savedConnectionsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
+	savedConnectionsList := list.New([]list.Item{}, styles.GetBlueListDelegate(), 50, 20)
 	savedConnectionsList.Title = "Saved Connections"
 	scLS := list.DefaultStyles()
 	scLS.Title = styles.ListTitleStyle
@@ -114,7 +114,7 @@ func initialModel() models.Model {
 	si.Width = 80
 
 	// Tables list (compact: names only, no extra spacing)
-	tblDelegate := list.NewDefaultDelegate()
+	tblDelegate := styles.GetBlueListDelegate()
 	tblDelegate.ShowDescription = false
 	tblDelegate.SetSpacing(0)
 	tablesList := list.New([]list.Item{}, tblDelegate, 0, 0)
@@ -141,7 +141,7 @@ func initialModel() models.Model {
 		table.WithHeight(10),
 	)
 
-	t.SetStyles(styles.GetMagentaTableStyles())
+	t.SetStyles(styles.GetBlueTableStyles())
 
 	// Query results table
 	queryResultsTable := table.New(
@@ -149,7 +149,7 @@ func initialModel() models.Model {
 		table.WithFocused(true),
 		table.WithHeight(10),
 	)
-	queryResultsTable.SetStyles(styles.GetMagentaTableStyles())
+	queryResultsTable.SetStyles(styles.GetBlueTableStyles())
 
 	// Initialize textarea for field editing
 	ta := textarea.New()
@@ -1255,7 +1255,7 @@ func createDataPreviewTable(m appModel) appModel {
 		table.WithFocused(true),
 		table.WithHeight(availableHeight),
 	)
-	m.DataPreviewTable.SetStyles(styles.GetMagentaTableStyles())
+	m.DataPreviewTable.SetStyles(styles.GetBlueTableStyles())
 
 	return m
 }
@@ -1344,7 +1344,7 @@ func handleRelationshipsResult(m appModel, msg models.RelationshipsResult) (appM
 		table.WithFocused(true),
 		table.WithHeight(10),
 	)
-	m.RelationshipsTable.SetStyles(styles.GetMagentaTableStyles())
+	m.RelationshipsTable.SetStyles(styles.GetBlueTableStyles())
 	m.State = models.RelationshipsView
 	return m, nil
 }

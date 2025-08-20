@@ -98,8 +98,8 @@ func handleWindowResize(m models.Model, msg tea.WindowSizeMsg) (models.Model, te
 			table.WithFocused(false),
 			table.WithHeight(tableHeight),
 		)
-		// Apply magenta theme styles
-		m.QueryResultsTable.SetStyles(styles.GetMagentaTableStyles())
+		// Apply blue theme styles
+		m.QueryResultsTable.SetStyles(styles.GetBlueTableStyles())
 	}
 
 	return m, nil

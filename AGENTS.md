@@ -1,7 +1,6 @@
 # Repository Guidelines
 
 ## Project Structure & Modules
-- `cmd/dbx`: CLI entrypoint (`main.go`). Prefer this for new work.
 - `internal/`: application packages
   - `config/` (storage, persistence)
   - `database/` (DB queries and adapters)
@@ -22,7 +21,6 @@
 ```
 dbx/
 ├── main.go                     # Main application entry point
-├── cmd/dbx/                    # CLI entrypoint
 ├── internal/
 │   ├── config/                 # Configuration and file storage
 │   ├── database/               # Database operations and adapters
@@ -37,8 +35,8 @@ dbx/
 
 ## Build, Test, and Development
 - Install deps: `go mod tidy`.
-- Build binary: `go build -o dbx ./cmd/dbx` (or `go build .`).
-- Run locally: `go run ./cmd/dbx` or `./dbx`.
+- Build binary: `go build`.
+- Run locally: `go run .` or `./dbx`.
 - Format code: `go fmt ./...`; keep imports organized.
 - Static checks: `go vet ./...`.
 - Run tests: `go test ./...` (use `-run` to scope).
