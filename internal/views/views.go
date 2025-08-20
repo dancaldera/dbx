@@ -330,7 +330,7 @@ func QueryHistoryView(m models.Model) string {
 // DataPreviewView renders the table data preview screen
 func DataPreviewView(m models.Model) string {
 	// Add title with table name
-	title := fmt.Sprintf("📊 %s", m.SelectedTable)
+    title := fmt.Sprintf("%s", m.SelectedTable)
 	content := styles.TitleStyle.Render(title)
 
 	// Show status messages (loading, success, error)
@@ -487,7 +487,7 @@ func RelationshipsView(m models.Model) string {
 func RowDetailView(m models.Model) string {
 	if m.IsViewingFieldDetail {
 		// Show full field detail view with scrolling
-		title := styles.TitleStyle.Render(fmt.Sprintf("📋 Field: %s", m.SelectedFieldForDetail))
+    title := styles.TitleStyle.Render(fmt.Sprintf("Field: %s", m.SelectedFieldForDetail))
 
 		// Find the selected field value
 		var fieldValue string
@@ -658,7 +658,7 @@ func RowDetailView(m models.Model) string {
 	// Show field list view or edit mode
 	if m.IsEditingField {
 		// Show simplified field editing interface
-		title := fmt.Sprintf("✏️ Edit Field: %s", m.EditingFieldName)
+    title := fmt.Sprintf("Edit Field: %s", m.EditingFieldName)
 		content := styles.TitleStyle.Render(title) + "\n\n"
 		
 		// Show status messages
@@ -681,7 +681,7 @@ func RowDetailView(m models.Model) string {
 		return styles.DocStyle.Render(content)
 	}
 
-	title := fmt.Sprintf("📋 Row Details - %s", m.SelectedTable)
+    title := fmt.Sprintf("Row Details - %s", m.SelectedTable)
 	content := styles.TitleStyle.Render(title) + "\n"
 
 	if len(m.SelectedRowData) == 0 || len(m.DataPreviewAllColumns) == 0 {
