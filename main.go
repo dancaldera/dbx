@@ -252,6 +252,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.FieldTextarea.SetWidth(textareaWidth)
 		m.FieldTextarea.SetHeight(textareaHeight)
 
+		// Recompute data preview table to fill available space
+		if len(m.DataPreviewAllColumns) > 0 && len(m.DataPreviewAllRows) > 0 {
+			m = createDataPreviewTable(m)
+		}
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
@@ -1130,74 +1135,134 @@ func handleDataPreviewResult(m appModel, msg models.DataPreviewResult) (appModel
 }
 
 func createDataPreviewTable(m appModel) appModel {
-	if len(m.DataPreviewAllColumns) == 0 {
-		return m
-	}
+    if len(m.DataPreviewAllColumns) == 0 {
+        return m
+    }
 
-	// Calculate visible column range
-	startCol := m.DataPreviewScrollOffset
-	endCol := startCol + m.DataPreviewVisibleCols
-	if endCol > len(m.DataPreviewAllColumns) {
-		endCol = len(m.DataPreviewAllColumns)
-	}
+    // Determine available width for table content within the document frame
+    h, v := styles.DocStyle.GetFrameSize()
+    availableWidth := m.Width - h - 4
+    if availableWidth < 20 {
+        availableWidth = 20
+    }
 
-	// Build visible columns with dynamic width
-	visibleCols := m.DataPreviewAllColumns[startCol:endCol]
-	cols := make([]table.Column, len(visibleCols))
-	for i, c := range visibleCols {
-		colIndex := startCol + i
-		// Calculate optimal column width based on content
-		maxWidth := len(c) // Start with header length
-		for _, row := range m.DataPreviewAllRows {
-			if colIndex < len(row) && len(row[colIndex]) > maxWidth {
-				cellLength := len(row[colIndex])
-				if cellLength > 40 { // Cap at 40 characters for very long content
-					cellLength = 40
-				}
-				if cellLength > maxWidth {
-					maxWidth = cellLength
-				}
-			}
-		}
-		// Minimum width of 8, maximum of 40
-		if maxWidth < 8 {
-			maxWidth = 8
-		} else if maxWidth > 40 {
-			maxWidth = 40
-		}
-		cols[i] = table.Column{Title: c, Width: maxWidth}
-	}
+    // Precompute width for every column (based on header and data) capped to [8, 40]
+    colWidths := make([]int, len(m.DataPreviewAllColumns))
+    for colIdx, c := range m.DataPreviewAllColumns {
+        maxWidth := len(c)
+        for _, row := range m.DataPreviewAllRows {
+            if colIdx < len(row) {
+                cellLength := len(row[colIdx])
+                if cellLength > 40 {
+                    cellLength = 40
+                }
+                if cellLength > maxWidth {
+                    maxWidth = cellLength
+                }
+            }
+        }
+        if maxWidth < 8 {
+            maxWidth = 8
+        } else if maxWidth > 40 {
+            maxWidth = 40
+        }
+        colWidths[colIdx] = maxWidth
+    }
 
-	// Build visible rows with content truncation
-	rows := make([]table.Row, len(m.DataPreviewAllRows))
-	for i, r := range m.DataPreviewAllRows {
-		visibleCells := make(table.Row, len(visibleCols))
-		for j := range visibleCols {
-			colIndex := startCol + j
-			if colIndex < len(r) {
-				cell := r[colIndex]
-				if len(cell) > 40 {
-					visibleCells[j] = cell[:37] + "..."
-				} else {
-					visibleCells[j] = cell
-				}
-			} else {
-				visibleCells[j] = ""
-			}
-		}
-		rows[i] = visibleCells
-	}
+    // Compute how many columns fit starting from the current scroll offset
+    startCol := m.DataPreviewScrollOffset
+    sum := 0
+    endCol := startCol
+    for endCol < len(colWidths) {
+        // Rough allowance for padding/separators per column
+        next := colWidths[endCol] + 3
+        if sum+next > availableWidth {
+            break
+        }
+        sum += next
+        endCol++
+    }
+    if endCol == startCol {
+        // Ensure at least one column is visible
+        endCol = min(startCol+1, len(colWidths))
+    }
+    visibleCount := endCol - startCol
+    if visibleCount < 0 {
+        visibleCount = 0
+    }
+    m.DataPreviewVisibleCols = visibleCount
 
-	// Recreate table with visible columns/rows
-	m.DataPreviewTable = table.New(
-		table.WithColumns(cols),
-		table.WithRows(rows),
-		table.WithFocused(true),
-		table.WithHeight(26),
-	)
-	m.DataPreviewTable.SetStyles(styles.GetMagentaTableStyles())
+    // Build visible columns
+    visibleCols := m.DataPreviewAllColumns[startCol:endCol]
+    cols := make([]table.Column, len(visibleCols))
+    for i, c := range visibleCols {
+        cols[i] = table.Column{Title: c, Width: colWidths[startCol+i]}
+    }
 
-	return m
+    // Build visible rows with content truncation per computed column width
+    rows := make([]table.Row, len(m.DataPreviewAllRows))
+    for i, r := range m.DataPreviewAllRows {
+        visibleCells := make(table.Row, len(visibleCols))
+        for j := 0; j < len(visibleCols); j++ {
+            colIndex := startCol + j
+            if colIndex < len(r) {
+                cell := r[colIndex]
+                maxW := colWidths[colIndex]
+                if len(cell) > maxW {
+                    ellipsis := 0
+                    if maxW >= 3 {
+                        ellipsis = 3
+                    }
+                    trim := max(0, maxW-ellipsis)
+                    if trim <= 0 {
+                        visibleCells[j] = ""
+                    } else if ellipsis > 0 {
+                        visibleCells[j] = cell[:trim] + "..."
+                    } else {
+                        visibleCells[j] = cell[:trim]
+                    }
+                } else {
+                    visibleCells[j] = cell
+                }
+            } else {
+                visibleCells[j] = ""
+            }
+        }
+        rows[i] = visibleCells
+    }
+
+    // Compute dynamic height to use remaining vertical space
+    reserved := 10 // Title + info + help, approximate
+    availableHeight := m.Height - v - reserved
+    if availableHeight < 5 {
+        availableHeight = 5
+    }
+
+    // Recreate table with visible columns/rows and dynamic height
+    m.DataPreviewTable = table.New(
+        table.WithColumns(cols),
+        table.WithRows(rows),
+        table.WithFocused(true),
+        table.WithHeight(availableHeight),
+    )
+    m.DataPreviewTable.SetStyles(styles.GetMagentaTableStyles())
+
+return m
+}
+
+// Small helpers for integer min/max
+func min(a, b int) int {
+    if a < b {
+        return a
+    }
+    return b
+}
+
+func max(a, b int) int {
+    if a > b {
+        return a
+    }
+    return b
 }
 
 func loadRelationships(m appModel) tea.Cmd {
