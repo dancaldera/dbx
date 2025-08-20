@@ -718,8 +718,20 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case "left", "h":
 				if m.IsViewingFieldDetail {
-					// Scroll left in field detail view (move by 10 characters)
-					m.FieldDetailHorizontalOffset -= 10
+					// Calculate scroll increment based on available width
+					availableWidth := m.Width - 10
+					if availableWidth < 40 {
+						availableWidth = 40
+					}
+					if availableWidth > 200 {
+						availableWidth = 200
+					}
+					scrollIncrement := availableWidth / 4 // Scroll by 1/4 of screen width
+					if scrollIncrement < 5 {
+						scrollIncrement = 5 // Minimum scroll
+					}
+					
+					m.FieldDetailHorizontalOffset -= scrollIncrement
 					if m.FieldDetailHorizontalOffset < 0 {
 						m.FieldDetailHorizontalOffset = 0
 					}
@@ -727,8 +739,20 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case "right", "l":
 				if m.IsViewingFieldDetail {
-					// Scroll right in field detail view (move by 10 characters)
-					m.FieldDetailHorizontalOffset += 10
+					// Calculate scroll increment based on available width
+					availableWidth := m.Width - 10
+					if availableWidth < 40 {
+						availableWidth = 40
+					}
+					if availableWidth > 200 {
+						availableWidth = 200
+					}
+					scrollIncrement := availableWidth / 4 // Scroll by 1/4 of screen width
+					if scrollIncrement < 5 {
+						scrollIncrement = 5 // Minimum scroll
+					}
+					
+					m.FieldDetailHorizontalOffset += scrollIncrement
 					return m, nil
 				}
 			}

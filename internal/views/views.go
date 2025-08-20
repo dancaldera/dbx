@@ -502,6 +502,79 @@ func RowDetailView(m models.Model) string {
 			fieldValue = "(Empty)"
 		}
 
+		// Try to format JSON for better readability
+		if strings.HasPrefix(strings.TrimSpace(fieldValue), "{") || strings.HasPrefix(strings.TrimSpace(fieldValue), "[") {
+			// Attempt to pretty-print JSON
+			var formatted strings.Builder
+			indent := 0
+			inString := false
+			escaped := false
+			
+			for i, char := range fieldValue {
+				if escaped {
+					formatted.WriteRune(char)
+					escaped = false
+					continue
+				}
+				
+				if char == '\\' && inString {
+					formatted.WriteRune(char)
+					escaped = true
+					continue
+				}
+				
+				if char == '"' {
+					inString = !inString
+					formatted.WriteRune(char)
+					continue
+				}
+				
+				if inString {
+					formatted.WriteRune(char)
+					continue
+				}
+				
+				switch char {
+				case '{', '[':
+					formatted.WriteRune(char)
+					formatted.WriteRune('\n')
+					indent++
+					for j := 0; j < indent*2; j++ {
+						formatted.WriteRune(' ')
+					}
+				case '}', ']':
+					if i > 0 && fieldValue[i-1] != '\n' {
+						formatted.WriteRune('\n')
+					}
+					indent--
+					for j := 0; j < indent*2; j++ {
+						formatted.WriteRune(' ')
+					}
+					formatted.WriteRune(char)
+					if i < len(fieldValue)-1 {
+						formatted.WriteRune('\n')
+						for j := 0; j < indent*2; j++ {
+							formatted.WriteRune(' ')
+						}
+					}
+				case ',':
+					formatted.WriteRune(char)
+					formatted.WriteRune('\n')
+					for j := 0; j < indent*2; j++ {
+						formatted.WriteRune(' ')
+					}
+				case ':':
+					formatted.WriteRune(char)
+					formatted.WriteRune(' ')
+				default:
+					if char != ' ' || formatted.Len() == 0 || formatted.String()[formatted.Len()-1] != ' ' {
+						formatted.WriteRune(char)
+					}
+				}
+			}
+			fieldValue = formatted.String()
+		}
+
 		// Split content into lines for scrolling
 		lines := strings.Split(fieldValue, "\n")
 
@@ -512,13 +585,22 @@ func RowDetailView(m models.Model) string {
 			endLine = len(lines)
 		}
 
+		// Calculate dynamic width (use window width minus padding)
+		availableWidth := m.Width - 10 // Reserve space for margins
+		if availableWidth < 40 {
+			availableWidth = 40 // Minimum width
+		}
+		if availableWidth > 200 {
+			availableWidth = 200 // Maximum width for readability
+		}
+
 		// Build visible content with horizontal scrolling
 		var visibleLines []string
 		for i := startLine; i < endLine; i++ {
 			line := lines[i]
 			// Apply horizontal scrolling
 			if m.FieldDetailHorizontalOffset < len(line) {
-				endChar := m.FieldDetailHorizontalOffset + m.FieldDetailCharsPerLine
+				endChar := m.FieldDetailHorizontalOffset + availableWidth
 				if endChar > len(line) {
 					endChar = len(line)
 				}
@@ -555,8 +637,8 @@ func RowDetailView(m models.Model) string {
 			titleWithScroll += styles.InfoStyle.Render(scrollInfo)
 		}
 
-		// Render with fixed dimensions
-		contentBox := styles.InputStyle.Width(m.FieldDetailCharsPerLine).Height(m.FieldDetailLinesPerPage).Render(displayContent)
+		// Render with dynamic dimensions
+		contentBox := styles.InputStyle.Width(availableWidth).Height(m.FieldDetailLinesPerPage).Render(displayContent)
 
 		helpText := styles.HelpStyle.Render(
 			styles.KeyStyle.Render("↑↓/jk") + ": scroll vertical • " +
