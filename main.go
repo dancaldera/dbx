@@ -629,7 +629,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.RowDetailList.SetShowHelp(false)
 							// Size the list to available viewport immediately
 							h, v := styles.DocStyle.GetFrameSize()
-							m.RowDetailList.SetSize(m.Width-h, m.Height-v-8)
+							// Reserve fewer lines so the title is visible and top items are not clipped
+							m.RowDetailList.SetSize(m.Width-h, m.Height-v-5)
 							m.IsViewingFieldDetail = false
 
 							m.State = models.RowDetailView
@@ -1505,18 +1506,24 @@ func (d fieldItemDelegate) Render(w io.Writer, m list.Model, index int, it list.
 
 	// Compose: prefix + Name: value [Type]
 	namePart := fi.Name + ": "
-	typePart := " [" + t + "]"
+	// Style type badge
+	badge := styles.TypeBadgeStyle.Render("[" + t + "]")
+	// Keep a space before the badge
+	spaceBeforeBadge := 1
 
-	// Budget for value so type is always shown
-	budget := width - len(prefix) - len(namePart) - len(typePart)
+	// Sanitize value to single line to prevent layout issues
+	single := strings.Join(strings.Fields(fi.Value), " ")
+
+	// Budget for value so type is always shown (use display widths)
+	budget := width - lipgloss.Width(prefix) - lipgloss.Width(namePart) - spaceBeforeBadge - lipgloss.Width(badge)
 	if budget < 0 {
 		budget = 0
 	}
-	val := ansi.Truncate(fi.Value, budget, "...")
+	val := ansi.Truncate(single, budget, "...")
 
-	line := prefix + namePart + val + typePart
+	line := prefix + namePart + val + strings.Repeat(" ", spaceBeforeBadge) + badge
 
-	// Style when selected
+	// Style when selected (apply to entire line for clarity)
 	if index == m.Index() {
 		line = styles.FocusedStyle.Render(line)
 	}
