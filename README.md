@@ -63,40 +63,80 @@ go run ./cmd/dbx
 
 ### Navigation Controls
 
-| Key | Action |
-|-----|--------|
-| **↑/↓** | Navigate through lists and tables |
-| **Enter** | Select item or confirm action |
-| **Esc** | Go back to previous screen |
-| **q** or **Ctrl+C** | Quit application |
+Global
 
-### Data Operations
+- **↑/↓**: Navigate lists and tables
+- **Enter**: Select or confirm
+- **Esc**: Go back
+- **q/Ctrl+C**: Quit
 
-| Key | Action |
-|-----|--------|
-| **p** | Preview table data (first 10 rows) |
-| **r** | Run custom SQL query |
-| **i** | View indexes and constraints |
-| **f** | View foreign key relationships |
-| **Ctrl+F** or **/** | Search tables or columns |
-| **Ctrl+H** | Access query history |
+DB Type Selection
 
-### Connection Management
+- **enter**: Select database type
+- **s**: Open saved connections
+- **q**: Quit
 
-| Key | Action |
-|-----|--------|
-| **s** | Save database connection |
-| **e** | Edit saved connection |
-| **d** | Delete saved connection or query |
-| **F1** | Test database connection |
-| **F2** | Validate, save and connect |
+Saved Connections
 
-### Export Options
+- **enter**: Connect
+- **esc**: Back
 
-| Key | Action |
-|-----|--------|
-| **Ctrl+E** | Export to CSV |
-| **Ctrl+J** | Export to JSON |
+Connection Form
+
+- **Enter**: Save and connect
+- **F1**: Test connection
+- **Tab**: Switch fields
+- **Esc**: Back
+
+Schemas
+
+- **enter**: Select schema
+- **esc**: Back
+
+Tables
+
+- **enter**: Preview data
+- **v**: View columns
+- **f**: Relationships
+- **esc**: Disconnect
+
+Columns
+
+- **↑/↓**: Navigate
+- **esc**: Back to tables
+
+Data Preview
+
+- **hjkl**: Navigate cells
+- **←/→**: Previous/next page
+- **enter**: Row details
+- **/**: Filter
+- **s**: Sort columns
+- **r**: Reload
+- Filter active: **enter** apply, **esc** cancel
+- Sort mode: **↑/↓** select column, **enter** toggle asc/desc, **esc** exit
+- **esc**: Back
+
+Row Details
+
+- Field list: **↑/↓** navigate, **enter** view field, **e** edit, **esc** back
+- Field detail: **↑↓/jk** scroll, **←→/hl** horizontal scroll, **esc** back
+- Edit field: **Ctrl+S** save, **Ctrl+K** clear, **Esc** cancel
+
+Query Runner
+
+- **Enter**: Execute query
+- **Tab**: Switch focus
+- **↑/↓**: Navigate results
+- **Ctrl+E**: Export CSV
+- **Ctrl+J**: Export JSON
+- **Esc**: Back to tables
+
+Query History
+
+- **enter**: Use query
+- **d**: Delete
+- **esc**: Back
 
 ### Connection Strings
 
@@ -194,48 +234,6 @@ go test ./...
 ## Contributing
 
 Contributions are welcome! Please review `CONTRIBUTING.md` for guidelines on setting up your environment, coding style, testing, and submitting pull requests.
-
-## MVP Roadmap
-
-### Core Features (Must Have)
-- [x] 1. Connection persistence - Save and load database connections
-- [x] 2. Query execution - Run custom SQL queries within the TUI
-- [x] 3. Result display - Show query results in paginated table format
-- [x] 4. Table data preview - Show sample rows from selected tables
-- [x] 5. Export functionality - Export query results to CSV/JSON
-- [x] 6. Connection testing - Validate connections before saving
-- [x] 7. Error handling improvements - Better error messages and recovery
-- [x] 8. Search functionality - Search tables and columns by name
-- [x] 9. Query history - Save and recall previously executed queries
-
-### Enhanced Database Support
-- [x] 10. Database schema support - Handle multiple schemas in PostgreSQL
-- [x] 11. View support - Browse and explore database views
-- [x] 12. Index information - Display table indexes and constraints
-- [x] 13. Foreign key relationships - Show table relationships
-- [ ] 14. Stored procedures - List and describe stored procedures/functions
-- [ ] 15. SSL/TLS support - Secure connections with certificate validation
-
-### Advanced Features
-- [ ] 16. Multi-connection support - Work with multiple databases simultaneously
-- [ ] 17. Data filtering - Basic filtering on table data preview
-- [ ] 18. Bookmark tables - Mark frequently accessed tables
-- [ ] 19. Connection string validation - Real-time validation with hints
-- [ ] 20. Configuration file - Settings for defaults and preferences
-- [ ] 21. Performance monitoring - Basic query execution time tracking
-
-### Extended Database Support
-- [ ] 22. Redis support - Connect to and explore Redis data structures
-- [ ] 23. MongoDB support - Browse MongoDB collections and documents
-- [ ] 24. Query builder - Visual query construction for SQL databases
-- [ ] 25. Database migration tools - Simple schema migration utilities
-
-### Nice to Have Features
-- [ ] 26. Keyboard shortcuts help - In-app help screen
-- [ ] 27. Loading indicators - Progress bars for long-running operations
-- [ ] 28. Plugin system - Extensible architecture for custom features
-- [ ] 29. Themes support - Multiple color schemes and styling options
-- [ ] 30. Cloud database support - AWS RDS, Google Cloud SQL, etc.
 
 ## Code Quality Standards
 
