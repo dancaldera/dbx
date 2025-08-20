@@ -498,9 +498,7 @@ func RowDetailView(m models.Model) string {
 			}
 		}
 
-		if fieldValue == "" {
-			fieldValue = "(Empty)"
-		}
+		// Show empty string as-is when value is empty
 
 		// Try to format JSON for better readability
 		if strings.HasPrefix(strings.TrimSpace(fieldValue), "{") || strings.HasPrefix(strings.TrimSpace(fieldValue), "[") {

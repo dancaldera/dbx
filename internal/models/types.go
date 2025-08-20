@@ -97,17 +97,14 @@ type FieldItem struct {
 
 func (f FieldItem) Title() string { return f.Name }
 func (f FieldItem) Description() string {
-	if f.Value == "NULL" {
-		return "(NULL)"
-	}
-	if f.Value == "(Empty)" {
-		return "(Empty)"
-	}
-	// Truncate long values for list display
-	if len(f.Value) > 80 {
-		return f.Value[:77] + "..."
-	}
-	return f.Value
+    if f.Value == "NULL" {
+        return "(NULL)"
+    }
+    // Truncate long values for list display
+    if len(f.Value) > 80 {
+        return f.Value[:77] + "..."
+    }
+    return f.Value
 }
 func (f FieldItem) FilterValue() string { return f.Name }
 

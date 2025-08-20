@@ -601,16 +601,13 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							var items []list.Item
 							for i, col := range m.DataPreviewAllColumns {
 								var value string
-								if i < len(m.SelectedRowData) {
-									value = m.SelectedRowData[i]
-									if value == "" {
-										value = "(Empty)"
+									if i < len(m.SelectedRowData) {
+										value = m.SelectedRowData[i]
+									} else {
+										value = "NULL"
 									}
-								} else {
-									value = "NULL"
+									items = append(items, models.FieldItem{Name: col, Value: value})
 								}
-								items = append(items, models.FieldItem{Name: col, Value: value})
-							}
 
 							// Initialize the row detail list
 							delegate := list.NewDefaultDelegate()
@@ -1218,24 +1215,21 @@ func handleFieldUpdateResult(m appModel, msg models.FieldUpdateResult) (appModel
 	
 	if msg.Success {
 		// Update the row data with the new value
-		if m.EditingFieldIndex >= 0 && m.EditingFieldIndex < len(m.SelectedRowData) {
-			m.SelectedRowData[m.EditingFieldIndex] = msg.NewValue
-		}
-		
-		// Update the row detail list with the new value
-		items := make([]list.Item, len(m.DataPreviewAllColumns))
-		for i, col := range m.DataPreviewAllColumns {
-			var value string
-			if i < len(m.SelectedRowData) {
-				value = m.SelectedRowData[i]
-				if value == "" {
-					value = "(Empty)"
+				if m.EditingFieldIndex >= 0 && m.EditingFieldIndex < len(m.SelectedRowData) {
+					m.SelectedRowData[m.EditingFieldIndex] = msg.NewValue
 				}
-			} else {
-				value = "NULL"
-			}
-			items[i] = models.FieldItem{Name: col, Value: value}
-		}
+				
+				// Update the row detail list with the new value
+				items := make([]list.Item, len(m.DataPreviewAllColumns))
+				for i, col := range m.DataPreviewAllColumns {
+					var value string
+					if i < len(m.SelectedRowData) {
+						value = m.SelectedRowData[i]
+					} else {
+						value = "NULL"
+					}
+					items[i] = models.FieldItem{Name: col, Value: value}
+				}
 		m.RowDetailList.SetItems(items)
 		
 		m.QueryResult = "✅ Field updated successfully!"
