@@ -1480,7 +1480,7 @@ func main() {
 // fieldItemDelegate renders field name/value with a right-aligned type badge.
 type fieldItemDelegate struct{}
 
-func (d fieldItemDelegate) Height() int                               { return 2 }
+func (d fieldItemDelegate) Height() int                               { return 1 }
 func (d fieldItemDelegate) Spacing() int                              { return 0 }
 func (d fieldItemDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
 
@@ -1499,35 +1499,27 @@ func (d fieldItemDelegate) Render(w io.Writer, m list.Model, index int, it list.
 	badge := styles.TypeBadgeStyle.Render("[" + t + "]")
 	badgeW := lipgloss.Width(badge)
 
-	// Prepare name line
-	name := fi.Name
-	nameW := width - badgeW - 1
-	if nameW < 0 {
-		nameW = 0
-	}
-	name = ansi.Truncate(name, nameW, "...")
-	space1 := strings.Repeat(" ", max(0, width-badgeW-lipgloss.Width(name)))
-
-	// Selected state styling
+	// Single-line: Name: Value [Type]
+	name := fi.Name + ": "
 	if index == m.Index() {
 		name = styles.FocusedStyle.Render(name)
+	} else {
+		name = styles.InfoStyle.Render(name)
 	}
 
-	// Write first line: name + right badge
-	fmt.Fprint(w, name+space1+badge)
-
-	// Prepare value line
-	val := fi.Value
-	valW := width - badgeW - 1
-	if valW < 0 {
-		valW = 0
+	leftW := width - badgeW
+	if leftW < 0 {
+		leftW = 0
 	}
-	// Show single-line preview; full content available with enter
-	val = ansi.Truncate(val, valW, "...")
-	space2 := strings.Repeat(" ", max(0, width-badgeW-lipgloss.Width(val)))
-
-	// Second line
-	fmt.Fprint(w, "\n"+val+space2+badge)
+	valueArea := leftW - 1 - lipgloss.Width(name)
+	if valueArea < 0 {
+		valueArea = 0
+	}
+	val := ansi.Truncate(fi.Value, valueArea, "...")
+	line := name + val
+	pad := max(0, width-badgeW-lipgloss.Width(line))
+	line = line + strings.Repeat(" ", pad) + badge
+	fmt.Fprint(w, line)
 }
 
 // inferFieldType returns a simple type label based on content heuristics.
