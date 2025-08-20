@@ -33,13 +33,13 @@ func InitialModel() models.Model {
 		}
 	}
 
-    dbList := list.New(items, list.NewDefaultDelegate(), 0, 0)
-    dbList.Title = "🗄️ DBX — Database Explorer"
-    // Remove any default title background and apply our title style
-    ls := list.DefaultStyles()
-    ls.Title = styles.ListTitleStyle
-    ls.TitleBar = lipgloss.NewStyle()
-    dbList.Styles = ls
+	dbList := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	dbList.Title = "🗄️ DBX — Database Explorer"
+	// Remove any default title background and apply our title style
+	ls := list.DefaultStyles()
+	ls.Title = styles.ListTitleStyle
+	ls.TitleBar = lipgloss.NewStyle()
+	dbList.Styles = ls
 	dbList.SetShowStatusBar(false)
 	dbList.SetFilteringEnabled(false)
 	dbList.SetShowHelp(false)
@@ -51,14 +51,14 @@ func InitialModel() models.Model {
 	queryHistory, _ := config.LoadQueryHistory()
 
 	// Saved connections list
-    savedConnectionsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
-    savedConnectionsList.Title = "💾 Saved Connections"
-    // Transparent title bar for saved connections
-    scLS := list.DefaultStyles()
-    scLS.Title = styles.ListTitleStyle
-    scLS.TitleBar = lipgloss.NewStyle()
-    savedConnectionsList.Styles = scLS
-    savedConnectionsList.SetShowStatusBar(false)
+	savedConnectionsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
+	savedConnectionsList.Title = "💾 Saved Connections"
+	// Transparent title bar for saved connections
+	scLS := list.DefaultStyles()
+	scLS.Title = styles.ListTitleStyle
+	scLS.TitleBar = lipgloss.NewStyle()
+	savedConnectionsList.Styles = scLS
+	savedConnectionsList.SetShowStatusBar(false)
 	savedConnectionsList.SetFilteringEnabled(false)
 	savedConnectionsList.SetShowHelp(false)
 
@@ -101,15 +101,18 @@ func InitialModel() models.Model {
 	si.CharLimit = 100
 	si.Width = 80
 
-	// Tables list
-    tablesList := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
-    tablesList.Title = "📊 Available Tables"
-    // Transparent title bar for tables
-    tblLS := list.DefaultStyles()
-    tblLS.Title = styles.ListTitleStyle
-    tblLS.TitleBar = lipgloss.NewStyle()
-    tablesList.Styles = tblLS
-    tablesList.SetShowStatusBar(false)
+	// Tables list (compact: names only, no extra spacing)
+	tblDelegate := list.NewDefaultDelegate()
+	tblDelegate.ShowDescription = false
+	tblDelegate.SetSpacing(0)
+	tablesList := list.New([]list.Item{}, tblDelegate, 0, 0)
+	tablesList.Title = "Available Tables"
+	// Transparent title bar for tables
+	tblLS := list.DefaultStyles()
+	tblLS.Title = styles.ListTitleStyle
+	tblLS.TitleBar = lipgloss.NewStyle()
+	tablesList.Styles = tblLS
+	tablesList.SetShowStatusBar(false)
 	tablesList.SetFilteringEnabled(false)
 	tablesList.SetShowHelp(false)
 
@@ -184,26 +187,26 @@ func InitialModel() models.Model {
 	ta.SetHeight(20)
 
 	// Query history list
-    queryHistoryList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
-    queryHistoryList.Title = "📝 Query History"
-    // Transparent title bar for query history
-    qhLS := list.DefaultStyles()
-    qhLS.Title = styles.ListTitleStyle
-    qhLS.TitleBar = lipgloss.NewStyle()
-    queryHistoryList.Styles = qhLS
-    queryHistoryList.SetShowStatusBar(false)
+	queryHistoryList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
+	queryHistoryList.Title = "📝 Query History"
+	// Transparent title bar for query history
+	qhLS := list.DefaultStyles()
+	qhLS.Title = styles.ListTitleStyle
+	qhLS.TitleBar = lipgloss.NewStyle()
+	queryHistoryList.Styles = qhLS
+	queryHistoryList.SetShowStatusBar(false)
 	queryHistoryList.SetFilteringEnabled(false)
 	queryHistoryList.SetShowHelp(false)
 
 	// Schemas list
-    schemasList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
-    schemasList.Title = "🗂️ Database Schemas"
-    // Transparent title bar for schemas
-    schLS := list.DefaultStyles()
-    schLS.Title = styles.ListTitleStyle
-    schLS.TitleBar = lipgloss.NewStyle()
-    schemasList.Styles = schLS
-    schemasList.SetShowStatusBar(false)
+	schemasList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
+	schemasList.Title = "🗂️ Database Schemas"
+	// Transparent title bar for schemas
+	schLS := list.DefaultStyles()
+	schLS.Title = styles.ListTitleStyle
+	schLS.TitleBar = lipgloss.NewStyle()
+	schemasList.Styles = schLS
+	schemasList.SetShowStatusBar(false)
 	schemasList.SetFilteringEnabled(false)
 	schemasList.SetShowHelp(false)
 
@@ -251,7 +254,7 @@ func updateQueryHistoryList(m *models.Model) {
 
 	// Show newest queries first
 	items := make([]list.Item, len(m.QueryHistory))
-	for i, entry := range m.QueryHistory {
+	for i := range m.QueryHistory {
 		// Reverse order - newest first
 		reverseIndex := len(m.QueryHistory) - 1 - i
 		reversedEntry := m.QueryHistory[reverseIndex]

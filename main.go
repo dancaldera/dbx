@@ -41,13 +41,13 @@ func initialModel() models.Model {
 		}
 	}
 
-    dbList := list.New(items, list.NewDefaultDelegate(), 0, 0)
-    dbList.Title = "🗄️ DBX — Database Explorer"
-    // Remove any default title background and apply our title style
-    ls := list.DefaultStyles()
-    ls.Title = styles.ListTitleStyle
-    ls.TitleBar = lipgloss.NewStyle()
-    dbList.Styles = ls
+	dbList := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	dbList.Title = "🗄️ DBX — Database Explorer"
+	// Remove any default title background and apply our title style
+	ls := list.DefaultStyles()
+	ls.Title = styles.ListTitleStyle
+	ls.TitleBar = lipgloss.NewStyle()
+	dbList.Styles = ls
 	dbList.SetShowStatusBar(false)
 	dbList.SetFilteringEnabled(false)
 	dbList.SetShowHelp(false)
@@ -59,13 +59,13 @@ func initialModel() models.Model {
 	queryHistory, _ := config.LoadQueryHistory()
 
 	// Saved connections list
-    savedConnectionsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
-    savedConnectionsList.Title = "💾 Saved Connections"
-    scLS := list.DefaultStyles()
-    scLS.Title = styles.ListTitleStyle
-    scLS.TitleBar = lipgloss.NewStyle()
-    savedConnectionsList.Styles = scLS
-    savedConnectionsList.SetShowStatusBar(false)
+	savedConnectionsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 50, 20)
+	savedConnectionsList.Title = "💾 Saved Connections"
+	scLS := list.DefaultStyles()
+	scLS.Title = styles.ListTitleStyle
+	scLS.TitleBar = lipgloss.NewStyle()
+	savedConnectionsList.Styles = scLS
+	savedConnectionsList.SetShowStatusBar(false)
 	savedConnectionsList.SetFilteringEnabled(false)
 	savedConnectionsList.SetShowHelp(false)
 
@@ -108,14 +108,17 @@ func initialModel() models.Model {
 	si.CharLimit = 100
 	si.Width = 80
 
-	// Tables list
-    tablesList := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
-    tablesList.Title = "📊 Available Tables"
-    tblLS := list.DefaultStyles()
-    tblLS.Title = styles.ListTitleStyle
-    tblLS.TitleBar = lipgloss.NewStyle()
-    tablesList.Styles = tblLS
-    tablesList.SetShowStatusBar(false)
+	// Tables list (compact: names only, no extra spacing)
+	tblDelegate := list.NewDefaultDelegate()
+	tblDelegate.ShowDescription = false
+	tblDelegate.SetSpacing(0)
+	tablesList := list.New([]list.Item{}, tblDelegate, 0, 0)
+	tablesList.Title = "Available Tables"
+	tblLS := list.DefaultStyles()
+	tblLS.Title = styles.ListTitleStyle
+	tblLS.TitleBar = lipgloss.NewStyle()
+	tablesList.Styles = tblLS
+	tablesList.SetShowStatusBar(false)
 	tablesList.SetFilteringEnabled(false)
 	tablesList.SetShowHelp(false)
 
@@ -170,6 +173,11 @@ func initialModel() models.Model {
 		FieldDetailLinesPerPage: 25,  // Show 25 lines per page in field detail view
 		FieldDetailCharsPerLine: 120, // Show 120 characters per line in field detail view
 		FieldTextarea:           ta,  // Initialize textarea for field editing
+		DataPreviewCurrentPage:  0,   // Start at first page
+		DataPreviewItemsPerPage: 25,  // Show 25 items per page
+		DataPreviewTotalRows:    0,   // Will be set when loading data
+		DataPreviewScrollOffset: 0,   // Start at first column
+		DataPreviewVisibleCols:  6,   // Show 6 columns at once
 	}
 
 	return m
@@ -193,12 +201,12 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return handleConnectResult(m, msg)
 	case models.TestConnectionResult:
 		return handleTestConnectionResult(m, msg)
-    case models.ColumnsResult:
-        return handleColumnsResult(m, msg)
-    case models.DataPreviewResult:
-        return handleDataPreviewResult(m, msg)
-    case models.RelationshipsResult:
-        return handleRelationshipsResult(m, msg)
+	case models.ColumnsResult:
+		return handleColumnsResult(m, msg)
+	case models.DataPreviewResult:
+		return handleDataPreviewResult(m, msg)
+	case models.RelationshipsResult:
+		return handleRelationshipsResult(m, msg)
 	case models.ClearResultMsg:
 		m.QueryResult = ""
 		return m, nil
@@ -233,8 +241,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 
-        case "esc":
-            switch m.State {
+		case "esc":
+			switch m.State {
 			case models.SavedConnectionsView:
 				m.State = models.DBTypeView
 				m.Err = nil
@@ -259,14 +267,14 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.TableInfos = nil
 				m.SelectedTable = ""
 				m.Err = nil
-            case models.ColumnsView:
-                m.State = models.TablesView
-            case models.DataPreviewView:
-                m.State = models.TablesView
-            case models.RelationshipsView:
-                m.State = models.TablesView
-            }
-            return m, nil
+			case models.ColumnsView:
+				m.State = models.TablesView
+			case models.DataPreviewView:
+				m.State = models.TablesView
+			case models.RelationshipsView:
+				m.State = models.TablesView
+			}
+			return m, nil
 
 		case "s":
 			if m.State == models.DBTypeView {
@@ -295,8 +303,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-        case "enter":
-            switch m.State {
+		case "enter":
+			switch m.State {
 			case models.DBTypeView:
 				if i, ok := m.DBTypeList.SelectedItem().(models.Item); ok {
 					for _, db := range dbTypes {
@@ -354,33 +362,35 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
-            case models.TablesView:
-                if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingPreview {
-                    m.SelectedTable = i.ItemTitle
-                    m.IsLoadingPreview = true
-                    m.Err = nil
-                    return m, loadDataPreview(m)
-                }
-            }
-        case "p":
-            // Keep "p" as an alias for preview
-            if m.State == models.TablesView {
-                if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingPreview {
-                    m.SelectedTable = i.ItemTitle
-                    m.IsLoadingPreview = true
-                    m.Err = nil
-                    return m, loadDataPreview(m)
-                }
-            }
-        case "v":
-            if m.State == models.TablesView {
-                if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingColumns {
-                    m.SelectedTable = i.ItemTitle
-                    m.IsLoadingColumns = true
-                    m.Err = nil
-                    return m, loadColumns(m)
-                }
-            }
+			case models.TablesView:
+				if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingPreview {
+					m.SelectedTable = i.ItemTitle
+					m.IsLoadingPreview = true
+					m.DataPreviewCurrentPage = 0 // Reset to first page
+					m.Err = nil
+					return m, loadDataPreview(m)
+				}
+			}
+		case "p":
+			// Keep "p" as an alias for preview
+			if m.State == models.TablesView {
+				if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingPreview {
+					m.SelectedTable = i.ItemTitle
+					m.IsLoadingPreview = true
+					m.DataPreviewCurrentPage = 0 // Reset to first page
+					m.Err = nil
+					return m, loadDataPreview(m)
+				}
+			}
+		case "v":
+			if m.State == models.TablesView {
+				if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingColumns {
+					m.SelectedTable = i.ItemTitle
+					m.IsLoadingColumns = true
+					m.Err = nil
+					return m, loadColumns(m)
+				}
+			}
 		case "f":
 			if m.State == models.TablesView && m.DB != nil {
 				return m, loadRelationships(m)
@@ -416,19 +426,53 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case models.SaveConnectionView:
 		m.NameInput, cmd = m.NameInput.Update(msg)
-    case models.TablesView:
-        m.TablesList, cmd = m.TablesList.Update(msg)
-    case models.ColumnsView:
-        m.ColumnsTable, cmd = m.ColumnsTable.Update(msg)
-    case models.DataPreviewView:
-        if km, ok := msg.(tea.KeyMsg); ok {
-            switch km.String() {
-            case "r":
-                return m, loadDataPreview(m)
-            }
-        }
-        m.DataPreviewTable, cmd = m.DataPreviewTable.Update(msg)
-    }
+	case models.TablesView:
+		m.TablesList, cmd = m.TablesList.Update(msg)
+	case models.ColumnsView:
+		m.ColumnsTable, cmd = m.ColumnsTable.Update(msg)
+	case models.DataPreviewView:
+		if km, ok := msg.(tea.KeyMsg); ok {
+			switch km.String() {
+			case "r":
+				return m, loadDataPreview(m)
+			case "left":
+				// Previous page
+				if m.DataPreviewCurrentPage > 0 {
+					m.DataPreviewCurrentPage--
+					return m, loadDataPreviewWithPagination(m)
+				}
+				return m, nil
+			case "right":
+				// Next page
+				totalPages := (m.DataPreviewTotalRows + m.DataPreviewItemsPerPage - 1) / m.DataPreviewItemsPerPage
+				if m.DataPreviewCurrentPage < totalPages-1 {
+					m.DataPreviewCurrentPage++
+					return m, loadDataPreviewWithPagination(m)
+				}
+				return m, nil
+			case "h":
+				// Scroll left (show previous columns)
+				if m.DataPreviewScrollOffset > 0 {
+					m.DataPreviewScrollOffset--
+					m = createDataPreviewTable(m)
+				}
+				return m, nil
+			case "l":
+				// Scroll right (show next columns)
+				totalCols := len(m.DataPreviewAllColumns)
+				if m.DataPreviewScrollOffset + m.DataPreviewVisibleCols < totalCols {
+					m.DataPreviewScrollOffset++
+					m = createDataPreviewTable(m)
+				}
+				return m, nil
+			case "j", "k", "up", "down":
+				// Allow j/k and arrow keys to navigate within the table rows
+				m.DataPreviewTable, cmd = m.DataPreviewTable.Update(msg)
+				return m, cmd
+			}
+		}
+		m.DataPreviewTable, cmd = m.DataPreviewTable.Update(msg)
+	}
 
 	return m, cmd
 }
@@ -538,12 +582,12 @@ func handleConnectResult(m appModel, msg models.ConnectResult) (appModel, tea.Cm
 		}
 	}
 
-	// Update tables list
+	// Update tables list (show only table names)
 	items := make([]list.Item, len(m.TableInfos))
 	for i, info := range m.TableInfos {
 		items[i] = models.Item{
 			ItemTitle: info.Name,
-			ItemDesc:  info.Description,
+			// omit description to avoid redundant "📊 Table" line per item
 		}
 	}
 	m.TablesList.SetItems(items)
@@ -583,75 +627,154 @@ func handleColumnsResult(m appModel, msg models.ColumnsResult) (appModel, tea.Cm
 }
 
 func loadDataPreview(m appModel) tea.Cmd {
-    return tea.Cmd(func() tea.Msg {
-        cols, rows, err := database.GetTablePreview(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, 10)
-        return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err}
-    })
+	return tea.Cmd(func() tea.Msg {
+		// Reset pagination and load first page
+		totalRows, err := database.GetTableRowCount(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema)
+		if err != nil {
+			return models.DataPreviewResult{Columns: nil, Rows: nil, Err: err}
+		}
+		
+		cols, rows, err := database.GetTablePreviewPaginated(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, 0)
+		return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: totalRows}
+	})
+}
+
+func loadDataPreviewWithPagination(m appModel) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		offset := m.DataPreviewCurrentPage * m.DataPreviewItemsPerPage
+		cols, rows, err := database.GetTablePreviewPaginated(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, offset)
+		return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: m.DataPreviewTotalRows}
+	})
 }
 
 func handleDataPreviewResult(m appModel, msg models.DataPreviewResult) (appModel, tea.Cmd) {
-    m.IsLoadingPreview = false
-    if msg.Err != nil {
-        m.Err = msg.Err
-        return m, nil
-    }
-    // Build columns meta
-    cols := make([]table.Column, len(msg.Columns))
-    for i, c := range msg.Columns {
-        cols[i] = table.Column{Title: c, Width: 16}
-    }
-    // Build rows
-    rows := make([]table.Row, len(msg.Rows))
-    for i, r := range msg.Rows {
-        tr := make(table.Row, len(r))
-        copy(tr, r)
-        rows[i] = tr
-    }
-    // Recreate table with new columns/rows
-    m.DataPreviewTable = table.New(
-        table.WithColumns(cols),
-        table.WithRows(rows),
-        table.WithFocused(true),
-        table.WithHeight(10),
-    )
-    m.DataPreviewTable.SetStyles(styles.GetMagentaTableStyles())
-    m.State = models.DataPreviewView
-    return m, nil
+	m.IsLoadingPreview = false
+	if msg.Err != nil {
+		m.Err = msg.Err
+		return m, nil
+	}
+	
+	// Update total rows count
+	if msg.TotalRows > 0 {
+		m.DataPreviewTotalRows = msg.TotalRows
+	}
+	
+	// Store all columns and rows for horizontal scrolling
+	m.DataPreviewAllColumns = msg.Columns
+	m.DataPreviewAllRows = msg.Rows
+	m.DataPreviewScrollOffset = 0 // Reset scroll position
+	
+	// Create the initial table view
+	m = createDataPreviewTable(m)
+	m.State = models.DataPreviewView
+	return m, nil
 }
 
+func createDataPreviewTable(m appModel) appModel {
+	if len(m.DataPreviewAllColumns) == 0 {
+		return m
+	}
+	
+	// Calculate visible column range
+	startCol := m.DataPreviewScrollOffset
+	endCol := startCol + m.DataPreviewVisibleCols
+	if endCol > len(m.DataPreviewAllColumns) {
+		endCol = len(m.DataPreviewAllColumns)
+	}
+	
+	// Build visible columns with dynamic width
+	visibleCols := m.DataPreviewAllColumns[startCol:endCol]
+	cols := make([]table.Column, len(visibleCols))
+	for i, c := range visibleCols {
+		colIndex := startCol + i
+		// Calculate optimal column width based on content
+		maxWidth := len(c) // Start with header length
+		for _, row := range m.DataPreviewAllRows {
+			if colIndex < len(row) && len(row[colIndex]) > maxWidth {
+				cellLength := len(row[colIndex])
+				if cellLength > 40 { // Cap at 40 characters for very long content
+					cellLength = 40
+				}
+				if cellLength > maxWidth {
+					maxWidth = cellLength
+				}
+			}
+		}
+		// Minimum width of 8, maximum of 40
+		if maxWidth < 8 {
+			maxWidth = 8
+		} else if maxWidth > 40 {
+			maxWidth = 40
+		}
+		cols[i] = table.Column{Title: c, Width: maxWidth}
+	}
+	
+	// Build visible rows with content truncation
+	rows := make([]table.Row, len(m.DataPreviewAllRows))
+	for i, r := range m.DataPreviewAllRows {
+		visibleCells := make(table.Row, len(visibleCols))
+		for j := range visibleCols {
+			colIndex := startCol + j
+			if colIndex < len(r) {
+				cell := r[colIndex]
+				if len(cell) > 40 {
+					visibleCells[j] = cell[:37] + "..."
+				} else {
+					visibleCells[j] = cell
+				}
+			} else {
+				visibleCells[j] = ""
+			}
+		}
+		rows[i] = visibleCells
+	}
+	
+	// Recreate table with visible columns/rows
+	m.DataPreviewTable = table.New(
+		table.WithColumns(cols),
+		table.WithRows(rows),
+		table.WithFocused(true),
+		table.WithHeight(26),
+	)
+	m.DataPreviewTable.SetStyles(styles.GetMagentaTableStyles())
+	
+	return m
+}
+
+
 func loadRelationships(m appModel) tea.Cmd {
-    return tea.Cmd(func() tea.Msg {
-        rels, err := database.GetForeignKeyRelationships(m.DB, m.SelectedDB.Driver, m.SelectedSchema)
-        return models.RelationshipsResult{Relationships: rels, Err: err}
-    })
+	return tea.Cmd(func() tea.Msg {
+		rels, err := database.GetForeignKeyRelationships(m.DB, m.SelectedDB.Driver, m.SelectedSchema)
+		return models.RelationshipsResult{Relationships: rels, Err: err}
+	})
 }
 
 func handleRelationshipsResult(m appModel, msg models.RelationshipsResult) (appModel, tea.Cmd) {
-    if msg.Err != nil {
-        m.Err = msg.Err
-        return m, nil
-    }
-    // columns: From Table, From Column, To Table, To Column, Constraint Name
-    cols := []table.Column{
-        {Title: "From Table", Width: 20},
-        {Title: "From Column", Width: 20},
-        {Title: "To Table", Width: 20},
-        {Title: "To Column", Width: 20},
-        {Title: "Constraint Name", Width: 25},
-    }
-    rows := make([]table.Row, len(msg.Relationships))
-    for i, rel := range msg.Relationships {
-        rows[i] = table.Row(rel)
-    }
-    m.RelationshipsTable = table.New(
-        table.WithColumns(cols),
-        table.WithRows(rows),
-        table.WithFocused(true),
-        table.WithHeight(10),
-    )
-    m.RelationshipsTable.SetStyles(styles.GetMagentaTableStyles())
-    m.State = models.RelationshipsView
-    return m, nil
+	if msg.Err != nil {
+		m.Err = msg.Err
+		return m, nil
+	}
+	// columns: From Table, From Column, To Table, To Column, Constraint Name
+	cols := []table.Column{
+		{Title: "From Table", Width: 20},
+		{Title: "From Column", Width: 20},
+		{Title: "To Table", Width: 20},
+		{Title: "To Column", Width: 20},
+		{Title: "Constraint Name", Width: 25},
+	}
+	rows := make([]table.Row, len(msg.Relationships))
+	for i, rel := range msg.Relationships {
+		rows[i] = table.Row(rel)
+	}
+	m.RelationshipsTable = table.New(
+		table.WithColumns(cols),
+		table.WithRows(rows),
+		table.WithFocused(true),
+		table.WithHeight(10),
+	)
+	m.RelationshipsTable.SetStyles(styles.GetMagentaTableStyles())
+	m.State = models.RelationshipsView
+	return m, nil
 }
 
 // Helper functions
