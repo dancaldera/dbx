@@ -1554,9 +1554,42 @@ func inferFieldType(v string) string {
 	if (strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}")) || (strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]")) {
 		return "JSON"
 	}
-	// Datetime (very loose check)
-	if strings.Contains(v, ":") && strings.Contains(v, "-") {
+	// DateTime: try to parse with common layouts instead of loose punctuation checks
+	if looksLikeDateTime(strings.TrimSpace(v)) {
 		return "DateTime"
 	}
 	return "Text"
+}
+
+// looksLikeDateTime attempts parsing with common datetime layouts
+func looksLikeDateTime(s string) bool {
+	if s == "" {
+		return false
+	}
+	// Avoid obviously long textual content
+	if len(s) > 64 {
+		return false
+	}
+	layouts := []string{
+		time.RFC3339,
+		time.RFC3339Nano,
+		time.RFC1123,
+		time.RFC1123Z,
+		time.RFC822,
+		time.RFC822Z,
+		time.RFC850,
+		time.RubyDate,
+		"2006-01-02 15:04:05 -0700 MST",
+		"2006-01-02 15:04:05 MST",
+		"2006-01-02 15:04:05.000 -0700 MST",
+		"2006-01-02 15:04:05.000",
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if _, err := time.Parse(layout, s); err == nil {
+			return true
+		}
+	}
+	return false
 }
