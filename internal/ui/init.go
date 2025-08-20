@@ -231,8 +231,6 @@ func InitialModel() models.Model {
 		QueryHistory:            queryHistory,
 		EditingConnectionIdx:    -1,
 		Spinner:                 s,
-		RowDetailItemsPerPage:   8,   // Show 8 fields per page
-		FullTextLinesPerPage:    20,  // Show 20 lines per page in full text view
 		FullTextItemsPerPage:    5,   // Show 5 fields per page in full text view
 		FieldDetailLinesPerPage: 25,  // Show 25 lines per page in field detail view
 		FieldDetailCharsPerLine: 120, // Show 120 characters per line in field detail view

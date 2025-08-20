@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -102,7 +103,8 @@ func ConnectionView(m models.Model) string {
 	)
 
 	helpText := styles.HelpStyle.Render(
-		styles.KeyStyle.Render("F1") + ": test connection • " +
+		styles.KeyStyle.Render("Enter") + ": save and connect • " +
+			styles.KeyStyle.Render("F1") + ": test connection • " +
 			styles.KeyStyle.Render("Tab") + ": switch fields • " +
 			styles.KeyStyle.Render("Esc") + ": back",
 	)
@@ -398,7 +400,7 @@ func DataPreviewView(m models.Model) string {
 			}
 			content += "\n" + filterLabel + " " + filterField
 		}
-		
+
 		// Show sort mode indicator if active
 		if m.DataPreviewSortMode {
 			var sortModeInfo string
@@ -428,6 +430,7 @@ func DataPreviewView(m models.Model) string {
 	} else {
 		helpText = styles.HelpStyle.Render(
 			styles.KeyStyle.Render("hjkl") + ": navigate • " +
+				styles.KeyStyle.Render("enter") + ": row details • " +
 				styles.KeyStyle.Render("←/→") + ": prev/next page • " +
 				styles.KeyStyle.Render("/") + ": filter • " +
 				styles.KeyStyle.Render("s") + ": sort columns • " +
@@ -477,5 +480,116 @@ func RelationshipsView(m models.Model) string {
 			styles.KeyStyle.Render("esc") + ": back to tables")
 
 	content += "\n" + helpText
+	return styles.DocStyle.Render(content)
+}
+
+// RowDetailView renders the detailed view of a selected row using a simple list
+func RowDetailView(m models.Model) string {
+	if m.IsViewingFieldDetail {
+		// Show full field detail view with scrolling
+		title := styles.TitleStyle.Render(fmt.Sprintf("📋 Field: %s", m.SelectedFieldForDetail))
+
+		// Find the selected field value
+		var fieldValue string
+		for i, col := range m.DataPreviewAllColumns {
+			if col == m.SelectedFieldForDetail && i < len(m.SelectedRowData) {
+				fieldValue = m.SelectedRowData[i]
+				break
+			}
+		}
+
+		if fieldValue == "" {
+			fieldValue = "(Empty)"
+		}
+
+		// Split content into lines for scrolling
+		lines := strings.Split(fieldValue, "\n")
+
+		// Calculate visible range
+		startLine := m.FieldDetailScrollOffset
+		endLine := startLine + m.FieldDetailLinesPerPage
+		if endLine > len(lines) {
+			endLine = len(lines)
+		}
+
+		// Build visible content with horizontal scrolling
+		var visibleLines []string
+		for i := startLine; i < endLine; i++ {
+			line := lines[i]
+			// Apply horizontal scrolling
+			if m.FieldDetailHorizontalOffset < len(line) {
+				endChar := m.FieldDetailHorizontalOffset + m.FieldDetailCharsPerLine
+				if endChar > len(line) {
+					endChar = len(line)
+				}
+				line = line[m.FieldDetailHorizontalOffset:endChar]
+			} else {
+				line = ""
+			}
+			visibleLines = append(visibleLines, line)
+		}
+
+		// Join the visible lines
+		displayContent := strings.Join(visibleLines, "\n")
+
+		// Create scroll indicators
+		scrollInfo := ""
+		
+		// Show line information
+		startDisplayLine := m.FieldDetailScrollOffset + 1
+		endDisplayLine := m.FieldDetailScrollOffset + len(visibleLines)
+		if endDisplayLine > len(lines) {
+			endDisplayLine = len(lines)
+		}
+		
+		if len(lines) > 1 {
+			scrollInfo = fmt.Sprintf(" • Lines %d-%d of %d", startDisplayLine, endDisplayLine, len(lines))
+		}
+
+		if m.FieldDetailHorizontalOffset > 0 {
+			scrollInfo += fmt.Sprintf(" • Column offset: %d", m.FieldDetailHorizontalOffset)
+		}
+
+		titleWithScroll := title
+		if scrollInfo != "" {
+			titleWithScroll += styles.InfoStyle.Render(scrollInfo)
+		}
+
+		// Render with fixed dimensions
+		contentBox := styles.InputStyle.Width(m.FieldDetailCharsPerLine).Height(m.FieldDetailLinesPerPage).Render(displayContent)
+
+		helpText := styles.HelpStyle.Render(
+			styles.KeyStyle.Render("↑↓/jk") + ": scroll vertical • " +
+				styles.KeyStyle.Render("←→/hl") + ": scroll horizontal • " +
+				styles.KeyStyle.Render("esc") + ": back to field list",
+		)
+
+		content := titleWithScroll + "\n\n" + contentBox + "\n\n" + helpText
+
+		return styles.DocStyle.Render(content)
+	}
+
+	// Show field list view
+	title := fmt.Sprintf("📋 Row Details - %s", m.SelectedTable)
+	content := styles.TitleStyle.Render(title) + "\n"
+
+	if len(m.SelectedRowData) == 0 || len(m.DataPreviewAllColumns) == 0 {
+		content += styles.ErrorStyle.Render("❌ No row data available") + "\n\n"
+		helpText := styles.HelpStyle.Render(styles.KeyStyle.Render("esc") + ": back to table")
+		content += helpText
+		return styles.DocStyle.Render(content)
+	}
+
+	// Show the list of fields
+	content += m.RowDetailList.View()
+
+	// Add help text
+	helpText := styles.HelpStyle.Render(
+		styles.KeyStyle.Render("↑↓") + ": navigate fields • " +
+			styles.KeyStyle.Render("enter") + ": view field detail • " +
+			styles.KeyStyle.Render("esc") + ": back to table",
+	)
+	content += "\n" + helpText
+
 	return styles.DocStyle.Render(content)
 }

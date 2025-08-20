@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/paginator"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -88,6 +89,28 @@ func (i Item) Title() string       { return i.ItemTitle }
 func (i Item) Description() string { return i.ItemDesc }
 func (i Item) FilterValue() string { return i.ItemTitle }
 
+// Field item for row details
+type FieldItem struct {
+	Name  string
+	Value string
+}
+
+func (f FieldItem) Title() string { return f.Name }
+func (f FieldItem) Description() string {
+	if f.Value == "NULL" {
+		return "(NULL)"
+	}
+	if f.Value == "(Empty)" {
+		return "(Empty)"
+	}
+	// Truncate long values for list display
+	if len(f.Value) > 80 {
+		return f.Value[:77] + "..."
+	}
+	return f.Value
+}
+func (f FieldItem) FilterValue() string { return f.Name }
+
 // Main model
 type Model struct {
 	State                ViewState
@@ -154,12 +177,10 @@ type Model struct {
 	// Row detail functionality
 	SelectedRowData        []string
 	SelectedRowIndex       int
-	RowDetailCurrentPage   int
-	RowDetailItemsPerPage  int
-	RowDetailSelectedField int
-	IsViewingFullText      bool
-	FullTextScrollOffset   int
-	FullTextLinesPerPage   int
+	RowDetailList          list.Model
+	RowDetailPaginator     paginator.Model
+	SelectedFieldForDetail string
+	IsViewingFieldDetail   bool
 
 	// Full text view pagination
 	FullTextCurrentPage   int

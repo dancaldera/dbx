@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -172,8 +174,6 @@ func initialModel() models.Model {
 		SavedConnections:        savedConnections,
 		QueryHistory:            queryHistory,
 		EditingConnectionIdx:    -1,
-		RowDetailItemsPerPage:   8,           // Show 8 fields per page
-		FullTextLinesPerPage:    20,          // Show 20 lines per page in full text view
 		FullTextItemsPerPage:    5,           // Show 5 fields per page in full text view
 		FieldDetailLinesPerPage: 25,          // Show 25 lines per page in field detail view
 		FieldDetailCharsPerLine: 120,         // Show 120 characters per line in field detail view
@@ -228,6 +228,10 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.DBTypeList.SetSize(msg.Width-h, msg.Height-v-5)
 		m.SavedConnectionsList.SetSize(msg.Width-h, msg.Height-v-5)
 		m.TablesList.SetSize(msg.Width-h, msg.Height-v-5)
+		// Only resize RowDetailList if it has been initialized
+		if len(m.RowDetailList.Items()) > 0 {
+			m.RowDetailList.SetSize(msg.Width-h, msg.Height-v-8)
+		}
 		m.TextInput.Width = msg.Width - h - 4
 		m.NameInput.Width = msg.Width - h - 4
 		m.QueryInput.Width = msg.Width - h - 4
@@ -254,16 +258,20 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case models.SavedConnectionsView:
 				m.State = models.DBTypeView
 				m.Err = nil
+				return m, nil
 			case models.ConnectionView:
 				m.State = models.DBTypeView
 				m.Err = nil
+				return m, nil
 			case models.SaveConnectionView:
 				m.State = models.ConnectionView
 				m.Err = nil
+				return m, nil
 			case models.EditConnectionView:
 				m.State = models.SavedConnectionsView
 				m.Err = nil
 				m.EditingConnectionIdx = -1
+				return m, nil
 			case models.TablesView:
 				if m.DB != nil {
 					m.DB.Close()
@@ -275,14 +283,18 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.TableInfos = nil
 				m.SelectedTable = ""
 				m.Err = nil
+				return m, nil
 			case models.ColumnsView:
 				m.State = models.TablesView
+				return m, nil
 			case models.DataPreviewView:
 				m.State = models.TablesView
+				return m, nil
 			case models.RelationshipsView:
 				m.State = models.TablesView
+				return m, nil
+			// Note: RowDetailView ESC handling is done in the specific handler below
 			}
-			return m, nil
 
 		case "s":
 			if m.State == models.DBTypeView {
@@ -335,6 +347,47 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.TextInput.Placeholder = "user:password@tcp(localhost:3306)/dbname"
 					case "sqlite3":
 						m.TextInput.Placeholder = "/path/to/database.db"
+					}
+				}
+
+			case models.ConnectionView:
+				if !m.IsConnecting && !m.IsTestingConnection {
+					m.ConnectionStr = m.TextInput.Value()
+					if m.ConnectionStr != "" {
+						// Save connection if a name is provided
+						connectionName := strings.TrimSpace(m.NameInput.Value())
+						if connectionName != "" {
+							// Check if connection name already exists
+							nameExists := false
+							for i, conn := range m.SavedConnections {
+								if conn.Name == connectionName {
+									// Update existing connection
+									m.SavedConnections[i] = models.SavedConnection{
+										Name:          connectionName,
+										Driver:        m.SelectedDB.Driver,
+										ConnectionStr: m.ConnectionStr,
+									}
+									nameExists = true
+									break
+								}
+							}
+							// Add new connection if name doesn't exist
+							if !nameExists {
+								newConnection := models.SavedConnection{
+									Name:          connectionName,
+									Driver:        m.SelectedDB.Driver,
+									ConnectionStr: m.ConnectionStr,
+								}
+								m.SavedConnections = append(m.SavedConnections, newConnection)
+							}
+							config.SaveConnections(m.SavedConnections)
+						}
+
+						// Connect to database
+						m.IsConnecting = true
+						m.Err = nil
+						m.QueryResult = ""
+						return m, connectDB(m)
 					}
 				}
 
@@ -518,6 +571,47 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Normal navigation mode
 			switch km.String() {
+			case "enter":
+				// Enter row detail view
+				if len(m.DataPreviewAllRows) > 0 {
+					selectedRow := m.DataPreviewTable.Cursor()
+					if selectedRow >= 0 && selectedRow < len(m.DataPreviewAllRows) {
+						// Calculate the actual row index based on current page and table position
+						actualRowIndex := (m.DataPreviewCurrentPage * m.DataPreviewItemsPerPage) + selectedRow
+						if actualRowIndex < len(m.DataPreviewAllRows) {
+							m.SelectedRowData = m.DataPreviewAllRows[selectedRow] // Use the displayed row
+							m.SelectedRowIndex = actualRowIndex                   // Track the actual position in the dataset
+
+							// Create list items for each field
+							var items []list.Item
+							for i, col := range m.DataPreviewAllColumns {
+								var value string
+								if i < len(m.SelectedRowData) {
+									value = m.SelectedRowData[i]
+									if value == "" {
+										value = "(Empty)"
+									}
+								} else {
+									value = "NULL"
+								}
+								items = append(items, models.FieldItem{Name: col, Value: value})
+							}
+
+							// Initialize the row detail list
+							delegate := list.NewDefaultDelegate()
+							m.RowDetailList = list.New(items, delegate, 80, 30)
+							m.RowDetailList.Title = "Select a field to view its full content"
+							m.RowDetailList.SetShowStatusBar(false)
+							m.RowDetailList.SetFilteringEnabled(false)
+							m.RowDetailList.SetShowHelp(true)
+							m.IsViewingFieldDetail = false
+
+							m.State = models.RowDetailView
+							return m, nil
+						}
+					}
+				}
+				return m, nil
 			case "/":
 				// Start filter mode
 				m.DataPreviewFilterActive = true
@@ -569,6 +663,84 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.DataPreviewTable, cmd = m.DataPreviewTable.Update(msg)
+	case models.RowDetailView:
+		if km, ok := msg.(tea.KeyMsg); ok {
+			switch km.String() {
+			case "enter":
+				if !m.IsViewingFieldDetail {
+					// Enter field detail view
+					if selectedItem, ok := m.RowDetailList.SelectedItem().(models.FieldItem); ok {
+						m.SelectedFieldForDetail = selectedItem.Name
+						m.IsViewingFieldDetail = true
+						// Reset scroll positions when entering field detail
+						m.FieldDetailScrollOffset = 0
+						m.FieldDetailHorizontalOffset = 0
+					}
+				}
+				return m, nil
+			case "esc":
+				if m.IsViewingFieldDetail {
+					// Exit field detail view, back to field list
+					m.IsViewingFieldDetail = false
+				} else {
+					// Return to data preview
+					m.State = models.DataPreviewView
+				}
+				return m, nil
+			case "up", "k":
+				if m.IsViewingFieldDetail {
+					// Scroll up in field detail view
+					if m.FieldDetailScrollOffset > 0 {
+						m.FieldDetailScrollOffset--
+					}
+					return m, nil
+				}
+			case "down", "j":
+				if m.IsViewingFieldDetail {
+					// Scroll down in field detail view
+					fieldValue := ""
+					for i, col := range m.DataPreviewAllColumns {
+						if col == m.SelectedFieldForDetail && i < len(m.SelectedRowData) {
+							fieldValue = m.SelectedRowData[i]
+							break
+						}
+					}
+					// Calculate max scroll based on field content
+					lines := len(strings.Split(fieldValue, "\n"))
+					maxScroll := lines - m.FieldDetailLinesPerPage
+					if maxScroll < 0 {
+						maxScroll = 0
+					}
+					if m.FieldDetailScrollOffset < maxScroll {
+						m.FieldDetailScrollOffset++
+					}
+					return m, nil
+				}
+			case "left", "h":
+				if m.IsViewingFieldDetail {
+					// Scroll left in field detail view (move by 10 characters)
+					m.FieldDetailHorizontalOffset -= 10
+					if m.FieldDetailHorizontalOffset < 0 {
+						m.FieldDetailHorizontalOffset = 0
+					}
+					return m, nil
+				}
+			case "right", "l":
+				if m.IsViewingFieldDetail {
+					// Scroll right in field detail view (move by 10 characters)
+					m.FieldDetailHorizontalOffset += 10
+					return m, nil
+				}
+			}
+		}
+
+		// Update the list if not viewing field detail
+		if !m.IsViewingFieldDetail {
+			m.RowDetailList, cmd = m.RowDetailList.Update(msg)
+		} else {
+			// When viewing field detail, don't let other key handlers interfere
+			return m, nil
+		}
 	}
 
 	return m, cmd
@@ -588,6 +760,8 @@ func (m appModel) View() string {
 		return views.TablesView(m.Model)
 	case models.DataPreviewView:
 		return views.DataPreviewView(m.Model)
+	case models.RowDetailView:
+		return views.RowDetailView(m.Model)
 	case models.RelationshipsView:
 		return views.RelationshipsView(m.Model)
 	case models.ColumnsView:
@@ -667,6 +841,9 @@ func handleConnectResult(m appModel, msg models.ConnectResult) (appModel, tea.Cm
 	m.DB = msg.DB
 	m.Tables = msg.Tables
 	m.SelectedSchema = msg.Schema
+
+	// Sort tables alphabetically
+	sort.Strings(m.Tables)
 
 	// Create simple table infos
 	m.TableInfos = make([]models.TableInfo, len(m.Tables))
