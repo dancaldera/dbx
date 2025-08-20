@@ -614,13 +614,19 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 									items = append(items, models.FieldItem{Name: col, Value: value})
 								}
 
-							// Initialize the row detail list
-							delegate := list.NewDefaultDelegate()
-							m.RowDetailList = list.New(items, delegate, 80, 30)
-							m.RowDetailList.Title = "Select a field to view its full content"
-							m.RowDetailList.SetShowStatusBar(false)
-							m.RowDetailList.SetFilteringEnabled(false)
-							m.RowDetailList.SetShowHelp(true)
+                            // Initialize the row detail list (full-width/height)
+                            delegate := list.NewDefaultDelegate()
+                            // Compact spacing to show more items
+                            delegate.SetSpacing(0)
+                            m.RowDetailList = list.New(items, delegate, 0, 0)
+                            m.RowDetailList.Title = "Select a field to view its full content"
+                            m.RowDetailList.SetShowStatusBar(false)
+                            m.RowDetailList.SetFilteringEnabled(false)
+                            // Hide built-in help to avoid duplicate help sections
+                            m.RowDetailList.SetShowHelp(false)
+                            // Size the list to available viewport immediately
+                            h, v := styles.DocStyle.GetFrameSize()
+                            m.RowDetailList.SetSize(m.Width-h, m.Height-v-8)
 							m.IsViewingFieldDetail = false
 
 							m.State = models.RowDetailView
