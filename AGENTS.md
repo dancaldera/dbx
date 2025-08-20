@@ -58,7 +58,7 @@ dbx/
 - PostgreSQL schemas: auto-detected; prompt when multiple exist; operations scoped to selection.
 
 ## View Support
-- Views listed with 👁️, tables with 📊; supported across PostgreSQL, MySQL, SQLite.
+- Views and tables are listed with clear labels; supported across PostgreSQL, MySQL, SQLite.
 
 ## Coding Style & Naming Conventions
 - Language: Go; follow standard tooling output (`go fmt`).

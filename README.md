@@ -132,7 +132,7 @@ username:password@tcp(localhost:3306)/database_name
 - **SQLite**: Uses default `main` schema
 
 ### Views and Tables
-- Views are marked with 👁️, tables with 📊
+- Views and tables are listed with clear labels (no icons)
 - Full column structure browsing for both tables and views
 - Data preview functionality for quick content inspection
 
