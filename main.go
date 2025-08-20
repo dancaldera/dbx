@@ -708,13 +708,15 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							}
 						}
 						
-						// Initialize textarea with current value and proper sizing
+						// Initialize textarea with current value and place cursor at start
 						m.FieldTextarea.SetValue(selectedItem.Value)
+						m.FieldTextarea.CursorStart()
 						
 						// Set responsive textarea size
 						h, v := styles.DocStyle.GetFrameSize()
 						textareaWidth := m.Width - h - 4
-						textareaHeight := m.Height - v - 12 // Reserve space for title, labels, and help text
+						// Use more space now that we only render the textarea in edit view
+						textareaHeight := m.Height - v - 8 // Reserve space for title and help text only
 						if textareaWidth < 40 {
 							textareaWidth = 40
 						}
