@@ -28,11 +28,10 @@ dbx/
 │   ├── database/               # Database operations and adapters
 │   ├── models/                 # Core types and interfaces
 │   ├── styles/                 # UI theming
-│   ├── ui/                     # Bubble Tea model initialization
 │   └── views/                  # UI view rendering
 ```
 
-DBX follows a clean, modular architecture with well-separated concerns across configuration management, database operations, type definitions, UI styling, and component organization. The main application logic and Bubble Tea update handlers are implemented in `main.go` using the `appModel` wrapper pattern.
+DBX follows a clean, modular architecture with well-separated concerns across configuration management, database operations, type definitions, UI styling, and view rendering. The main application logic and Bubble Tea update handlers are implemented in `main.go` using the `appModel` wrapper pattern.
 
 
 ## Installation

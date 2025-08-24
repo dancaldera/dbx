@@ -29,17 +29,10 @@ import (
 	"github.com/dancaldera/dbx/internal/views"
 )
 
-// Database types
-var dbTypes = []models.DBType{
-	{Name: "PostgreSQL", Driver: "postgres"},
-	{Name: "MySQL", Driver: "mysql"},
-	{Name: "SQLite", Driver: "sqlite3"},
-}
-
 func initialModel() models.Model {
 	// Database types list
-	items := make([]list.Item, len(dbTypes))
-	for i, db := range dbTypes {
+	items := make([]list.Item, len(models.SupportedDatabaseTypes))
+	for i, db := range models.SupportedDatabaseTypes {
 		items[i] = models.Item{
 			ItemTitle: db.Name,
 			ItemDesc:  fmt.Sprintf("Connect to %s database", db.Name),
@@ -350,7 +343,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch m.State {
 			case models.DBTypeView:
 				if i, ok := m.DBTypeList.SelectedItem().(models.Item); ok {
-					for _, db := range dbTypes {
+					for _, db := range models.SupportedDatabaseTypes {
 						if db.Name == i.ItemTitle {
 							m.SelectedDB = db
 							break
@@ -418,7 +411,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if i, ok := m.SavedConnectionsList.SelectedItem().(models.Item); ok && !m.IsConnecting {
 					for _, conn := range m.SavedConnections {
 						if conn.Name == i.ItemTitle {
-							for _, db := range dbTypes {
+							for _, db := range models.SupportedDatabaseTypes {
 								if db.Driver == conn.Driver {
 									m.SelectedDB = db
 									break

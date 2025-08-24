@@ -6,7 +6,6 @@
   - `database/` (DB queries and adapters)
   - `models/` (core types and state)
   - `styles/` (theme/styling)
-  - `ui/` (Bubble Tea models initialization)
   - `views/` (UI view rendering)
 - Root `main.go`: main entry point with app logic and update handlers.
 - Tests: alongside code as `*_test.go`.
@@ -25,11 +24,10 @@ dbx/
 │   ├── database/               # Database operations and adapters
 │   ├── models/                 # Core types and interfaces
 │   ├── styles/                 # UI theming
-│   ├── ui/                     # Bubble Tea model initialization
 │   └── views/                  # UI view rendering
 ```
 - Core states: `dbTypeView`, `connectionView`, `schemaView`, `tablesView`, `columnsView`, `queryView`, `queryHistoryView`.
-- Package roles: `config` (persistence), `database` (queries), `models` (types), `styles` (theme), `ui` (init), `views` (rendering).
+- Package roles: `config` (persistence), `database` (queries), `models` (types), `styles` (theme), `views` (rendering).
 - Update logic: implemented in `main.go` via `appModel` wrapper pattern (Go best practice for extending models from other packages).
 - Key deps: `bubbletea`, `bubbles`, `lipgloss`; DB drivers: `lib/pq`, `go-sql-driver/mysql`, `mattn/go-sqlite3`.
 
@@ -64,7 +62,7 @@ dbx/
 - Files: `snake_case.go` by feature (e.g., `operations.go`, `storage.go`).
 - Exports: `CamelCase`; unexported: `lowerCamel`.
 - Errors: wrap with context (e.g., `fmt.Errorf("op failed: %w", err)`).
-- Separation: UI in `ui`, DB in `database`, shared types in `models`.
+- Separation: DB in `database`, shared types in `models`, UI in `views`.
 - File size: keep each source file under 500 lines; refactor when approaching.
 
 ## Navigation Controls

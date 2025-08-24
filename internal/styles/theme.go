@@ -140,8 +140,8 @@ var (
 
 	// Type badge style for row details
 	TypeBadgeStyle = lipgloss.NewStyle().
-		Foreground(AccentBlue).
-		Bold(true)
+			Foreground(AccentBlue).
+			Bold(true)
 )
 
 // GetBlueTableStyles returns table styles with blue theme
