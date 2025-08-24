@@ -31,9 +31,9 @@ import (
 
 // Database types
 var dbTypes = []models.DBType{
-	{"PostgreSQL", "postgres"},
-	{"MySQL", "mysql"},
-	{"SQLite", "sqlite3"},
+	{Name: "PostgreSQL", Driver: "postgres"},
+	{Name: "MySQL", Driver: "mysql"},
+	{Name: "SQLite", Driver: "sqlite3"},
 }
 
 func initialModel() models.Model {
