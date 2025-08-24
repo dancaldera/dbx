@@ -11,9 +11,9 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(textinput.Blink, textarea.Blink, m.Spinner.Tick)
 }
 
-// Update will be implemented in the handlers package
+// Update will be implemented by wrapping this model (see main.go)
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// This will be handled by the handlers package
+	// This will be handled by the appModel wrapper in main.go
 	return m, nil
 }
 
