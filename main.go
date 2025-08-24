@@ -310,8 +310,12 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.State = models.TablesView
 				return m, nil
 			case models.DataPreviewView:
-				m.State = models.TablesView
-				return m, nil
+				// Only handle ESC if not in sort or filter mode
+				if !m.DataPreviewSortMode && !m.DataPreviewFilterActive {
+					m.State = models.TablesView
+					return m, nil
+				}
+				// Let the specific DataPreviewView handler deal with sort/filter mode ESC
 			case models.RelationshipsView:
 				m.State = models.TablesView
 				return m, nil
