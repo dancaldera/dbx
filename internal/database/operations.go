@@ -210,7 +210,7 @@ func GetTableInfos(db *sql.DB, driver, schema string) ([]models.TableInfo, error
 				emoji = "👁️"
 			} else {
 				objectType = "table"
-				emoji = "📊"
+				emoji = ""
 			}
 
 			if info.TableType == "BASE TABLE" && estimatedRows.Valid && estimatedRows.Int64 > 0 {
@@ -268,7 +268,7 @@ func GetTableInfos(db *sql.DB, driver, schema string) ([]models.TableInfo, error
 				emoji = "👁️"
 			} else {
 				objectType = "table"
-				emoji = "📊"
+				emoji = ""
 			}
 
 			if info.TableType == "BASE TABLE" && tableRows.Valid && tableRows.Int64 > 0 {
@@ -318,7 +318,7 @@ func GetTableInfos(db *sql.DB, driver, schema string) ([]models.TableInfo, error
 			} else {
 				info.TableType = "BASE TABLE"
 				objectType = "table"
-				emoji = "📊"
+				emoji = ""
 			}
 
 			// Try to get row count for tables only (views don't have meaningful row counts)
@@ -371,7 +371,7 @@ func GetSimpleTableInfos(db *sql.DB, driver, schema string) ([]models.TableInfo,
 			Name:        tableName,
 			Schema:      schemaName,
 			TableType:   "BASE TABLE",
-			Description: "📊 Table",
+			Description: "Table",
 		})
 	}
 

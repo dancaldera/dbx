@@ -35,7 +35,7 @@ func CreateTableInfos(tables []string, schema string) []models.TableInfo {
 			Name:        tableName,
 			Schema:      schema,
 			TableType:   "BASE TABLE",
-			Description: "📊 Table",
+			Description: "Table",
 		}
 	}
 	return tableInfos
@@ -78,7 +78,7 @@ func CreateTableListItems(tableInfos []models.TableInfo) []list.Item {
 	for i, info := range tableInfos {
 		items[i] = models.Item{
 			ItemTitle: info.Name,
-			// omit description to avoid redundant "📊 Table" line per item
+			// omit description to avoid redundant "Table" line per item
 		}
 	}
 	return items

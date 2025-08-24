@@ -256,7 +256,7 @@ func QueryView(m models.Model) string {
 
 	var resultContent string
 	if m.QueryResult != "" {
-		resultLabel := styles.SubtitleStyle.Render("📊 Query Result:")
+		resultLabel := styles.SubtitleStyle.Render("Query Result:")
 		resultText := styles.SuccessStyle.Render(m.QueryResult)
 
 		// Only show the table if it has both columns and rows, and they match
@@ -329,9 +329,8 @@ func QueryHistoryView(m models.Model) string {
 
 // DataPreviewView renders the enhanced table data preview screen
 func DataPreviewView(m models.Model) string {
-	// Enhanced title with table icon and name
-	tableIcon := "📊"
-	title := fmt.Sprintf("%s  %s", tableIcon, m.SelectedTable)
+	// Enhanced title with table name
+	title := fmt.Sprintf("%s", m.SelectedTable)
 	content := styles.TitleStyle.Render(title)
 
 	// Show status messages with improved styling
@@ -408,7 +407,7 @@ func DataPreviewView(m models.Model) string {
 		if m.DataPreviewScrollOffset > 0 {
 			columnLine.WriteString("← ")
 		}
-		columnLine.WriteString(fmt.Sprintf("📊 Columns %d-%d of %d", startCol, endCol, totalCols))
+		columnLine.WriteString(fmt.Sprintf("Columns %d-%d of %d", startCol, endCol, totalCols))
 		if endCol < totalCols {
 			columnLine.WriteString(" →")
 		}
