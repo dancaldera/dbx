@@ -1,4 +1,4 @@
-module github.com/danielcaldera/dbx
+module github.com/dancaldera/dbx
 
 go 1.24.5
 

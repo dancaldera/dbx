@@ -10,9 +10,9 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/danielcaldera/dbx/internal/config"
-	"github.com/danielcaldera/dbx/internal/models"
-	"github.com/danielcaldera/dbx/internal/styles"
+	"github.com/dancaldera/dbx/internal/config"
+	"github.com/dancaldera/dbx/internal/models"
+	"github.com/dancaldera/dbx/internal/styles"
 )
 
 // Available database types
@@ -34,7 +34,7 @@ func InitialModel() models.Model {
 	}
 
 	dbList := list.New(items, styles.GetBlueListDelegate(), 0, 0)
-    dbList.Title = "DBX — Database Explorer"
+	dbList.Title = "DBX — Database Explorer"
 	// Remove any default title background and apply our title style
 	ls := list.DefaultStyles()
 	ls.Title = styles.ListTitleStyle
@@ -52,7 +52,7 @@ func InitialModel() models.Model {
 
 	// Saved connections list
 	savedConnectionsList := list.New([]list.Item{}, styles.GetBlueListDelegate(), 50, 20)
-    savedConnectionsList.Title = "Saved Connections"
+	savedConnectionsList.Title = "Saved Connections"
 	// Transparent title bar for saved connections
 	scLS := list.DefaultStyles()
 	scLS.Title = styles.ListTitleStyle
@@ -188,7 +188,7 @@ func InitialModel() models.Model {
 
 	// Query history list
 	queryHistoryList := list.New([]list.Item{}, styles.GetBlueListDelegate(), 50, 20)
-    queryHistoryList.Title = "Query History"
+	queryHistoryList.Title = "Query History"
 	// Transparent title bar for query history
 	qhLS := list.DefaultStyles()
 	qhLS.Title = styles.ListTitleStyle
@@ -200,7 +200,7 @@ func InitialModel() models.Model {
 
 	// Schemas list
 	schemasList := list.New([]list.Item{}, styles.GetBlueListDelegate(), 50, 20)
-    schemasList.Title = "Database Schemas"
+	schemasList.Title = "Database Schemas"
 	// Transparent title bar for schemas
 	schLS := list.DefaultStyles()
 	schLS.Title = styles.ListTitleStyle

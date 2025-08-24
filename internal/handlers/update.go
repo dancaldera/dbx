@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/danielcaldera/dbx/internal/models"
-	"github.com/danielcaldera/dbx/internal/styles"
+	"github.com/dancaldera/dbx/internal/models"
+	"github.com/dancaldera/dbx/internal/styles"
 )
 
 // Init initializes the Bubble Tea program

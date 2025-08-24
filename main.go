@@ -22,11 +22,11 @@ import (
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/danielcaldera/dbx/internal/config"
-	"github.com/danielcaldera/dbx/internal/database"
-	"github.com/danielcaldera/dbx/internal/models"
-	"github.com/danielcaldera/dbx/internal/styles"
-	"github.com/danielcaldera/dbx/internal/views"
+	"github.com/dancaldera/dbx/internal/config"
+	"github.com/dancaldera/dbx/internal/database"
+	"github.com/dancaldera/dbx/internal/models"
+	"github.com/dancaldera/dbx/internal/styles"
+	"github.com/dancaldera/dbx/internal/views"
 )
 
 // Database types

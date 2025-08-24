@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go)](https://go.dev/dl/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-[![Go Report Card](https://goreportcard.com/badge/github.com/danielcaldera/dbx)](https://goreportcard.com/report/github.com/danielcaldera/dbx)
+[![Go Report Card](https://goreportcard.com/badge/github.com/dancaldera/dbx)](https://goreportcard.com/report/github.com/dancaldera/dbx)
 
 A terminal-based database explorer built with Go and Bubble Tea. DBX provides an interactive TUI for connecting to and exploring database structures across PostgreSQL, MySQL, and SQLite databases.
 

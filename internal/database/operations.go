@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/danielcaldera/dbx/internal/models"
+	"github.com/dancaldera/dbx/internal/models"
 )
 
 // ValidateConnectionString validates the format of connection strings

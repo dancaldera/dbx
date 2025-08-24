@@ -5,7 +5,7 @@ Thanks for your interest in improving dbx! Contributions of all kinds are welcom
 ## Getting Started
 - Prerequisites: Go 1.24.5 or later.
 - Clone and build:
-  - `git clone https://github.com/danielcaldera/dbx`
+  - `git clone https://github.com/dancaldera/dbx`
   - `cd dbx`
   - `go mod tidy`
   - `go build -o dbx ./cmd/dbx`

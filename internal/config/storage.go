@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/danielcaldera/dbx/internal/models"
+	"github.com/dancaldera/dbx/internal/models"
 )
 
 // GetConfigDir returns the configuration directory for the application

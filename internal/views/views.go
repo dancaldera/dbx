@@ -6,8 +6,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/danielcaldera/dbx/internal/models"
-	"github.com/danielcaldera/dbx/internal/styles"
+	"github.com/dancaldera/dbx/internal/models"
+	"github.com/dancaldera/dbx/internal/styles"
 )
 
 // DBTypeView renders the database type selection screen
@@ -330,7 +330,7 @@ func QueryHistoryView(m models.Model) string {
 // DataPreviewView renders the table data preview screen
 func DataPreviewView(m models.Model) string {
 	// Add title with table name
-    title := fmt.Sprintf("%s", m.SelectedTable)
+	title := fmt.Sprintf("%s", m.SelectedTable)
 	content := styles.TitleStyle.Render(title)
 
 	// Show status messages (loading, success, error)
@@ -487,7 +487,7 @@ func RelationshipsView(m models.Model) string {
 func RowDetailView(m models.Model) string {
 	if m.IsViewingFieldDetail {
 		// Show full field detail view with scrolling
-    title := styles.TitleStyle.Render(fmt.Sprintf("Field: %s", m.SelectedFieldForDetail))
+		title := styles.TitleStyle.Render(fmt.Sprintf("Field: %s", m.SelectedFieldForDetail))
 
 		// Find the selected field value
 		var fieldValue string
@@ -507,31 +507,31 @@ func RowDetailView(m models.Model) string {
 			indent := 0
 			inString := false
 			escaped := false
-			
+
 			for i, char := range fieldValue {
 				if escaped {
 					formatted.WriteRune(char)
 					escaped = false
 					continue
 				}
-				
+
 				if char == '\\' && inString {
 					formatted.WriteRune(char)
 					escaped = true
 					continue
 				}
-				
+
 				if char == '"' {
 					inString = !inString
 					formatted.WriteRune(char)
 					continue
 				}
-				
+
 				if inString {
 					formatted.WriteRune(char)
 					continue
 				}
-				
+
 				switch char {
 				case '{', '[':
 					formatted.WriteRune(char)
@@ -620,14 +620,14 @@ func RowDetailView(m models.Model) string {
 
 		// Create scroll indicators
 		scrollInfo := ""
-		
+
 		// Show line information
 		startDisplayLine := m.FieldDetailScrollOffset + 1
 		endDisplayLine := m.FieldDetailScrollOffset + len(visibleLines)
 		if endDisplayLine > len(lines) {
 			endDisplayLine = len(lines)
 		}
-		
+
 		if len(lines) > 1 {
 			scrollInfo = fmt.Sprintf(" • Lines %d-%d of %d", startDisplayLine, endDisplayLine, len(lines))
 		}
@@ -658,30 +658,30 @@ func RowDetailView(m models.Model) string {
 	// Show field list view or edit mode
 	if m.IsEditingField {
 		// Show simplified field editing interface
-    title := fmt.Sprintf("Edit Field: %s", m.EditingFieldName)
+		title := fmt.Sprintf("Edit Field: %s", m.EditingFieldName)
 		content := styles.TitleStyle.Render(title) + "\n\n"
-		
+
 		// Show status messages
 		if m.Err != nil {
-			content += styles.ErrorStyle.Render("❌ " + m.Err.Error()) + "\n\n"
+			content += styles.ErrorStyle.Render("❌ "+m.Err.Error()) + "\n\n"
 		} else if m.QueryResult != "" {
 			content += styles.SuccessStyle.Render(m.QueryResult) + "\n\n"
 		}
-		
+
 		// Only show the textarea for editing
 		content += m.FieldTextarea.View() + "\n\n"
-		
+
 		helpText := styles.HelpStyle.Render(
 			styles.KeyStyle.Render("Ctrl+S") + ": save changes • " +
-			styles.KeyStyle.Render("Ctrl+K") + ": clear • " +
-			styles.KeyStyle.Render("Esc") + ": cancel",
+				styles.KeyStyle.Render("Ctrl+K") + ": clear • " +
+				styles.KeyStyle.Render("Esc") + ": cancel",
 		)
 		content += helpText
-		
+
 		return styles.DocStyle.Render(content)
 	}
 
-    title := fmt.Sprintf("Row Details - %s", m.SelectedTable)
+	title := fmt.Sprintf("Row Details - %s", m.SelectedTable)
 	content := styles.TitleStyle.Render(title) + "\n"
 
 	if len(m.SelectedRowData) == 0 || len(m.DataPreviewAllColumns) == 0 {
@@ -690,10 +690,10 @@ func RowDetailView(m models.Model) string {
 		content += helpText
 		return styles.DocStyle.Render(content)
 	}
-	
+
 	// Show status messages
 	if m.Err != nil {
-		content += styles.ErrorStyle.Render("❌ " + m.Err.Error()) + "\n\n"
+		content += styles.ErrorStyle.Render("❌ "+m.Err.Error()) + "\n\n"
 	} else if m.QueryResult != "" {
 		content += styles.SuccessStyle.Render(m.QueryResult) + "\n\n"
 	}
