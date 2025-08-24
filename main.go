@@ -1,15 +1,10 @@
 package main
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"os"
-	"sort"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/table"
@@ -17,15 +12,14 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/dancaldera/dbx/internal/config"
-	"github.com/dancaldera/dbx/internal/database"
 	"github.com/dancaldera/dbx/internal/models"
 	"github.com/dancaldera/dbx/internal/styles"
+	"github.com/dancaldera/dbx/internal/utils"
 	"github.com/dancaldera/dbx/internal/views"
 )
 
@@ -203,17 +197,29 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle basic message types
 	switch msg := msg.(type) {
 	case models.ConnectResult:
-		return handleConnectResult(m, msg)
+		updatedModel := utils.HandleConnectResult(m.Model, msg)
+		m.Model = updatedModel
+		return m, nil
 	case models.TestConnectionResult:
-		return handleTestConnectionResult(m, msg)
+		updatedModel, cmd := utils.HandleTestConnectionResult(m.Model, msg)
+		m.Model = updatedModel
+		return m, cmd
 	case models.ColumnsResult:
-		return handleColumnsResult(m, msg)
+		updatedModel := utils.HandleColumnsResult(m.Model, msg)
+		m.Model = updatedModel
+		return m, nil
 	case models.DataPreviewResult:
-		return handleDataPreviewResult(m, msg)
+		updatedModel := utils.HandleDataPreviewResult(m.Model, msg)
+		m.Model = updatedModel
+		return m, nil
 	case models.RelationshipsResult:
-		return handleRelationshipsResult(m, msg)
+		updatedModel := utils.HandleRelationshipsResult(m.Model, msg)
+		m.Model = updatedModel
+		return m, nil
 	case models.FieldUpdateResult:
-		return handleFieldUpdateResult(m, msg)
+		updatedModel, cmd := utils.HandleFieldUpdateResult(m.Model, msg)
+		m.Model = updatedModel
+		return m, cmd
 	case models.ClearResultMsg:
 		m.QueryResult = ""
 		return m, nil
@@ -250,7 +256,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Recompute data preview table to fill available space
 		if len(m.DataPreviewAllColumns) > 0 && len(m.DataPreviewAllRows) > 0 {
-			m = createDataPreviewTable(m)
+			m.Model = utils.CreateDataPreviewTable(m.Model)
 		}
 
 	case tea.KeyMsg:
@@ -318,7 +324,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if connections, err := config.LoadSavedConnections(); err == nil {
 					m.SavedConnections = connections
 				}
-				m = updateSavedConnectionsList(m)
+				m.Model = utils.UpdateSavedConnectionsList(m.Model)
 				return m, nil
 			}
 			if m.State == models.ColumnsView && m.ConnectionStr != "" {
@@ -335,7 +341,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.IsTestingConnection = true
 					m.Err = nil
 					m.QueryResult = ""
-					return m, testConnection(m)
+					return m, utils.TestConnection(m.SelectedDB.Driver, m.ConnectionStr)
 				}
 			}
 
@@ -403,7 +409,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.IsConnecting = true
 						m.Err = nil
 						m.QueryResult = ""
-						return m, connectDB(m)
+						return m, utils.ConnectToDB(m.SelectedDB, m.ConnectionStr)
 					}
 				}
 
@@ -420,7 +426,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.ConnectionStr = conn.ConnectionStr
 							m.IsConnecting = true
 							m.Err = nil
-							return m, connectDB(m)
+							return m, utils.ConnectToDB(m.SelectedDB, m.ConnectionStr)
 						}
 					}
 				}
@@ -445,7 +451,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.IsLoadingPreview = true
 					m.DataPreviewCurrentPage = 0 // Reset to first page
 					m.Err = nil
-					return m, loadDataPreview(m)
+					return m, utils.LoadDataPreview(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn)
 				}
 			}
 		case "p":
@@ -456,7 +462,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.IsLoadingPreview = true
 					m.DataPreviewCurrentPage = 0 // Reset to first page
 					m.Err = nil
-					return m, loadDataPreview(m)
+					return m, utils.LoadDataPreview(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn)
 				}
 			}
 		case "v":
@@ -465,12 +471,12 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.SelectedTable = i.ItemTitle
 					m.IsLoadingColumns = true
 					m.Err = nil
-					return m, loadColumns(m)
+					return m, utils.LoadColumns(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema)
 				}
 			}
 		case "f":
 			if m.State == models.TablesView && m.DB != nil {
-				return m, loadRelationships(m)
+				return m, utils.LoadRelationships(m.DB, m.SelectedDB, m.SelectedSchema)
 			}
 		}
 	}
@@ -518,7 +524,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.DataPreviewFilterActive = false
 					m.DataPreviewFilterInput.Blur()
 					m.DataPreviewCurrentPage = 0 // Reset to first page
-					return m, loadDataPreviewWithFilter(m)
+					return m, utils.LoadDataPreviewWithFilter(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewFilterValue, m.DataPreviewAllColumns, m.DataPreviewSortDirection, m.DataPreviewSortColumn)
 				case "esc":
 					// Cancel filter
 					m.DataPreviewFilterActive = false
@@ -576,7 +582,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.DataPreviewSortMode = false
 					m.DataPreviewCurrentPage = 0 // Reset to first page when sorting changes
-					return m, loadDataPreviewWithSort(m)
+					return m, utils.LoadDataPreviewWithSort(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewCurrentPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn, m.DataPreviewFilterValue, m.DataPreviewAllColumns, m.DataPreviewTotalRows)
 				case "esc":
 					// Exit sort mode
 					m.DataPreviewSortMode = false
@@ -599,16 +605,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.SelectedRowIndex = actualRowIndex                   // Track the actual position in the dataset
 
 							// Create list items for each field
-							var items []list.Item
-							for i, col := range m.DataPreviewAllColumns {
-								var value string
-								if i < len(m.SelectedRowData) {
-									value = m.SelectedRowData[i]
-								} else {
-									value = "NULL"
-								}
-								items = append(items, models.FieldItem{Name: col, Value: value})
-							}
+							items := utils.UpdateRowDetailList(m.DataPreviewAllColumns, m.SelectedRowData)
 
 							// Initialize the row detail list (full-width/height)
 							// Use custom delegate to show type badges aligned right
@@ -645,27 +642,27 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			case "r":
-				return m, loadDataPreview(m)
+				return m, utils.LoadDataPreview(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn)
 			case "left":
 				// Previous page
 				if m.DataPreviewCurrentPage > 0 {
 					m.DataPreviewCurrentPage--
-					return m, loadDataPreviewWithPagination(m)
+					return m, utils.LoadDataPreviewWithPagination(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewCurrentPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn, m.DataPreviewFilterValue, m.DataPreviewAllColumns, m.DataPreviewTotalRows)
 				}
 				return m, nil
 			case "right":
 				// Next page
-				totalPages := (m.DataPreviewTotalRows + m.DataPreviewItemsPerPage - 1) / m.DataPreviewItemsPerPage
+				totalPages := utils.CalculateTotalPages(m.DataPreviewTotalRows, m.DataPreviewItemsPerPage)
 				if m.DataPreviewCurrentPage < totalPages-1 {
 					m.DataPreviewCurrentPage++
-					return m, loadDataPreviewWithPagination(m)
+					return m, utils.LoadDataPreviewWithPagination(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewCurrentPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn, m.DataPreviewFilterValue, m.DataPreviewAllColumns, m.DataPreviewTotalRows)
 				}
 				return m, nil
 			case "h":
 				// Scroll left (show previous columns)
 				if m.DataPreviewScrollOffset > 0 {
 					m.DataPreviewScrollOffset--
-					m = createDataPreviewTable(m)
+					m.Model = utils.CreateDataPreviewTable(m.Model)
 				}
 				return m, nil
 			case "l":
@@ -673,7 +670,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				totalCols := len(m.DataPreviewAllColumns)
 				if m.DataPreviewScrollOffset+m.DataPreviewVisibleCols < totalCols {
 					m.DataPreviewScrollOffset++
-					m = createDataPreviewTable(m)
+					m.Model = utils.CreateDataPreviewTable(m.Model)
 				}
 				return m, nil
 			case "j", "k", "up", "down":
@@ -756,7 +753,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.IsEditingField {
 					// Save the edited field
 					newValue := m.FieldTextarea.Value()
-					return m, saveFieldEdit(m, newValue)
+					return m, utils.SaveFieldEdit(m.DB, m.SelectedDB, m.SelectedSchema, m.SelectedTable, m.EditingFieldName, m.DataPreviewAllColumns, m.SelectedRowData, m.EditingFieldIndex, newValue)
 				}
 				return m, nil
 			case "ctrl+k":
@@ -883,587 +880,6 @@ func (m appModel) View() string {
 	}
 }
 
-// Helper functions
-
-func testConnection(m appModel) tea.Cmd {
-	return tea.Cmd(func() tea.Msg {
-		return database.TestConnectionWithTimeout(m.SelectedDB.Driver, m.ConnectionStr)
-	})
-}
-
-func handleTestConnectionResult(m appModel, msg models.TestConnectionResult) (appModel, tea.Cmd) {
-	m.IsTestingConnection = false
-	if msg.Success {
-		m.QueryResult = "✅ Connection successful!"
-	} else {
-		m.Err = fmt.Errorf("connection failed: %v", msg.Err)
-	}
-
-	return m, tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
-		return models.ClearResultMsg{}
-	})
-}
-
-func connectDB(m appModel) tea.Cmd {
-	return tea.Cmd(func() tea.Msg {
-		db, err := sql.Open(m.SelectedDB.Driver, m.ConnectionStr)
-		if err != nil {
-			return models.ConnectResult{Err: err}
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		err = db.PingContext(ctx)
-		if err != nil {
-			db.Close()
-			return models.ConnectResult{Err: err}
-		}
-
-		tables, err := database.GetTables(db, m.SelectedDB.Driver)
-		if err != nil {
-			db.Close()
-			return models.ConnectResult{Err: err}
-		}
-
-		schema := "public"
-		if m.SelectedDB.Driver == "mysql" {
-			schema = "mysql"
-		} else if m.SelectedDB.Driver == "sqlite3" {
-			schema = "main"
-		}
-
-		return models.ConnectResult{
-			DB:     db,
-			Driver: m.SelectedDB.Driver,
-			Tables: tables,
-			Schema: schema,
-		}
-	})
-}
-
-func handleConnectResult(m appModel, msg models.ConnectResult) (appModel, tea.Cmd) {
-	m.IsConnecting = false
-
-	if msg.Err != nil {
-		m.Err = msg.Err
-		return m, nil
-	}
-
-	m.DB = msg.DB
-	m.Tables = msg.Tables
-	m.SelectedSchema = msg.Schema
-
-	// Sort tables alphabetically
-	sort.Strings(m.Tables)
-
-	// Create simple table infos
-	m.TableInfos = make([]models.TableInfo, len(m.Tables))
-	for i, tableName := range m.Tables {
-		m.TableInfos[i] = models.TableInfo{
-			Name:        tableName,
-			Schema:      m.SelectedSchema,
-			TableType:   "BASE TABLE",
-			Description: "📊 Table",
-		}
-	}
-
-	// Update tables list (show only table names)
-	items := make([]list.Item, len(m.TableInfos))
-	for i, info := range m.TableInfos {
-		items[i] = models.Item{
-			ItemTitle: info.Name,
-			// omit description to avoid redundant "📊 Table" line per item
-		}
-	}
-	m.TablesList.SetItems(items)
-
-	m.State = models.TablesView
-	return m, nil
-}
-
-func loadColumns(m appModel) tea.Cmd {
-	return tea.Cmd(func() tea.Msg {
-		columns, err := database.GetColumns(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema)
-		return models.ColumnsResult{
-			Columns: columns,
-			Err:     err,
-		}
-	})
-}
-
-func handleColumnsResult(m appModel, msg models.ColumnsResult) (appModel, tea.Cmd) {
-	m.IsLoadingColumns = false
-
-	if msg.Err != nil {
-		m.Err = msg.Err
-		return m, nil
-	}
-
-	// Convert to table rows
-	rows := make([]table.Row, len(msg.Columns))
-	for i, col := range msg.Columns {
-		rows[i] = table.Row{col[0], col[1], col[2], col[3]}
-	}
-
-	m.ColumnsTable.SetRows(rows)
-	m.State = models.ColumnsView
-
-	return m, nil
-}
-
-func loadDataPreview(m appModel) tea.Cmd {
-	return tea.Cmd(func() tea.Msg {
-		// Reset pagination and load first page
-		totalRows, err := database.GetTableRowCount(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema)
-		if err != nil {
-			return models.DataPreviewResult{Columns: nil, Rows: nil, Err: err}
-		}
-
-		// Determine sort parameters
-		var sortColumn, sortDirection string
-		if m.DataPreviewSortDirection != models.SortOff && m.DataPreviewSortColumn != "" {
-			sortColumn = m.DataPreviewSortColumn
-			switch m.DataPreviewSortDirection {
-			case models.SortAsc:
-				sortDirection = "ASC"
-			case models.SortDesc:
-				sortDirection = "DESC"
-			}
-		}
-
-		cols, rows, err := database.GetTablePreviewPaginatedWithSort(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, 0, sortColumn, sortDirection)
-		return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: totalRows}
-	})
-}
-
-func loadDataPreviewWithPagination(m appModel) tea.Cmd {
-	return tea.Cmd(func() tea.Msg {
-		// Determine sort parameters
-		var sortColumn, sortDirection string
-		if m.DataPreviewSortDirection != models.SortOff && m.DataPreviewSortColumn != "" {
-			sortColumn = m.DataPreviewSortColumn
-			switch m.DataPreviewSortDirection {
-			case models.SortAsc:
-				sortDirection = "ASC"
-			case models.SortDesc:
-				sortDirection = "DESC"
-			}
-		}
-
-		offset := m.DataPreviewCurrentPage * m.DataPreviewItemsPerPage
-		if m.DataPreviewFilterValue != "" {
-			cols, rows, err := database.GetTablePreviewPaginatedWithFilterAndSort(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, offset, m.DataPreviewFilterValue, m.DataPreviewAllColumns, sortColumn, sortDirection)
-			return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: m.DataPreviewTotalRows}
-		}
-		cols, rows, err := database.GetTablePreviewPaginatedWithSort(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, offset, sortColumn, sortDirection)
-		return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: m.DataPreviewTotalRows}
-	})
-}
-
-func loadDataPreviewWithFilter(m appModel) tea.Cmd {
-	return tea.Cmd(func() tea.Msg {
-		// Get total rows with filter
-		totalRows, err := database.GetTableRowCountWithFilter(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewFilterValue, m.DataPreviewAllColumns)
-		if err != nil {
-			return models.DataPreviewResult{Columns: nil, Rows: nil, Err: err}
-		}
-
-		// Determine sort parameters
-		var sortColumn, sortDirection string
-		if m.DataPreviewSortDirection != models.SortOff && m.DataPreviewSortColumn != "" {
-			sortColumn = m.DataPreviewSortColumn
-			switch m.DataPreviewSortDirection {
-			case models.SortAsc:
-				sortDirection = "ASC"
-			case models.SortDesc:
-				sortDirection = "DESC"
-			}
-		}
-
-		// Get filtered and sorted data
-		cols, rows, err := database.GetTablePreviewPaginatedWithFilterAndSort(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, 0, m.DataPreviewFilterValue, m.DataPreviewAllColumns, sortColumn, sortDirection)
-		return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: totalRows}
-	})
-}
-
-func loadDataPreviewWithSort(m appModel) tea.Cmd {
-	return tea.Cmd(func() tea.Msg {
-		// Determine sort parameters
-		var sortColumn, sortDirection string
-		if m.DataPreviewSortDirection != models.SortOff && m.DataPreviewSortColumn != "" {
-			sortColumn = m.DataPreviewSortColumn
-			switch m.DataPreviewSortDirection {
-			case models.SortAsc:
-				sortDirection = "ASC"
-			case models.SortDesc:
-				sortDirection = "DESC"
-			}
-		}
-
-		offset := m.DataPreviewCurrentPage * m.DataPreviewItemsPerPage
-
-		// Use appropriate function based on whether filter is active
-		if m.DataPreviewFilterValue != "" {
-			cols, rows, err := database.GetTablePreviewPaginatedWithFilterAndSort(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, offset, m.DataPreviewFilterValue, m.DataPreviewAllColumns, sortColumn, sortDirection)
-			return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: m.DataPreviewTotalRows}
-		} else {
-			cols, rows, err := database.GetTablePreviewPaginatedWithSort(m.DB, m.SelectedDB.Driver, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, offset, sortColumn, sortDirection)
-			return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: m.DataPreviewTotalRows}
-		}
-	})
-}
-
-func handleDataPreviewResult(m appModel, msg models.DataPreviewResult) (appModel, tea.Cmd) {
-	m.IsLoadingPreview = false
-	if msg.Err != nil {
-		m.Err = msg.Err
-		return m, nil
-	}
-
-	// Update total rows count
-	if msg.TotalRows > 0 {
-		m.DataPreviewTotalRows = msg.TotalRows
-	}
-
-	// Store all columns and rows for horizontal scrolling
-	m.DataPreviewAllColumns = msg.Columns
-	m.DataPreviewAllRows = msg.Rows
-	m.DataPreviewScrollOffset = 0 // Reset scroll position
-
-	// Create the initial table view
-	m = createDataPreviewTable(m)
-	m.State = models.DataPreviewView
-	return m, nil
-}
-
-func createDataPreviewTable(m appModel) appModel {
-	if len(m.DataPreviewAllColumns) == 0 {
-		return m
-	}
-
-	// Determine available width for table content within the document frame
-	h, v := styles.DocStyle.GetFrameSize()
-	availableWidth := m.Width - h - 4
-	if availableWidth < 20 {
-		availableWidth = 20
-	}
-
-	// Precompute width for every column (based on header and data) capped to [8, 40]
-	colWidths := make([]int, len(m.DataPreviewAllColumns))
-	for colIdx, c := range m.DataPreviewAllColumns {
-		maxWidth := len(c)
-		for _, row := range m.DataPreviewAllRows {
-			if colIdx < len(row) {
-				cellLength := len(row[colIdx])
-				if cellLength > 40 {
-					cellLength = 40
-				}
-				if cellLength > maxWidth {
-					maxWidth = cellLength
-				}
-			}
-		}
-		if maxWidth < 8 {
-			maxWidth = 8
-		} else if maxWidth > 40 {
-			maxWidth = 40
-		}
-		colWidths[colIdx] = maxWidth
-	}
-
-	// Compute how many columns fit starting from the current scroll offset
-	startCol := m.DataPreviewScrollOffset
-	sum := 0
-	endCol := startCol
-	for endCol < len(colWidths) {
-		// Rough allowance for padding/separators per column
-		next := colWidths[endCol] + 3
-		if sum+next > availableWidth {
-			break
-		}
-		sum += next
-		endCol++
-	}
-	if endCol == startCol {
-		// Ensure at least one column is visible
-		endCol = min(startCol+1, len(colWidths))
-	}
-	visibleCount := endCol - startCol
-	if visibleCount < 0 {
-		visibleCount = 0
-	}
-	m.DataPreviewVisibleCols = visibleCount
-
-	// Build visible columns
-	visibleCols := m.DataPreviewAllColumns[startCol:endCol]
-	cols := make([]table.Column, len(visibleCols))
-	for i, c := range visibleCols {
-		cols[i] = table.Column{Title: c, Width: colWidths[startCol+i]}
-	}
-
-	// Build visible rows with content truncation per computed column width
-	rows := make([]table.Row, len(m.DataPreviewAllRows))
-	for i, r := range m.DataPreviewAllRows {
-		visibleCells := make(table.Row, len(visibleCols))
-		for j := 0; j < len(visibleCols); j++ {
-			colIndex := startCol + j
-			if colIndex < len(r) {
-				cell := r[colIndex]
-				maxW := colWidths[colIndex]
-				if len(cell) > maxW {
-					ellipsis := 0
-					if maxW >= 3 {
-						ellipsis = 3
-					}
-					trim := max(0, maxW-ellipsis)
-					if trim <= 0 {
-						visibleCells[j] = ""
-					} else if ellipsis > 0 {
-						visibleCells[j] = cell[:trim] + "..."
-					} else {
-						visibleCells[j] = cell[:trim]
-					}
-				} else {
-					visibleCells[j] = cell
-				}
-			} else {
-				visibleCells[j] = ""
-			}
-		}
-		rows[i] = visibleCells
-	}
-
-	// Compute dynamic height to use remaining vertical space
-	reserved := 10 // Title + info + help, approximate
-	availableHeight := m.Height - v - reserved
-	if availableHeight < 5 {
-		availableHeight = 5
-	}
-
-	// Recreate table with visible columns/rows and dynamic height
-	m.DataPreviewTable = table.New(
-		table.WithColumns(cols),
-		table.WithRows(rows),
-		table.WithFocused(true),
-		table.WithHeight(availableHeight),
-	)
-	m.DataPreviewTable.SetStyles(styles.GetBlueTableStyles())
-
-	return m
-}
-
-// Small helpers for integer min/max
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func loadRelationships(m appModel) tea.Cmd {
-	return tea.Cmd(func() tea.Msg {
-		rels, err := database.GetForeignKeyRelationships(m.DB, m.SelectedDB.Driver, m.SelectedSchema)
-		return models.RelationshipsResult{Relationships: rels, Err: err}
-	})
-}
-
-func handleFieldUpdateResult(m appModel, msg models.FieldUpdateResult) (appModel, tea.Cmd) {
-	if msg.ExitEdit {
-		m.IsEditingField = false
-		m.FieldTextarea.Blur()
-	}
-
-	if msg.Success {
-		// Update the row data with the new value
-		if m.EditingFieldIndex >= 0 && m.EditingFieldIndex < len(m.SelectedRowData) {
-			m.SelectedRowData[m.EditingFieldIndex] = msg.NewValue
-		}
-
-		// Update the row detail list with the new value
-		items := make([]list.Item, len(m.DataPreviewAllColumns))
-		for i, col := range m.DataPreviewAllColumns {
-			var value string
-			if i < len(m.SelectedRowData) {
-				value = m.SelectedRowData[i]
-			} else {
-				value = "NULL"
-			}
-			items[i] = models.FieldItem{Name: col, Value: value}
-		}
-		m.RowDetailList.SetItems(items)
-
-		m.QueryResult = "✅ Field updated successfully!"
-		m.Err = nil
-
-		// Clear the editing state
-		m.EditingFieldName = ""
-		m.OriginalFieldValue = ""
-
-		return m, clearResultAfterTimeout()
-	} else {
-		m.Err = msg.Err
-		return m, nil
-	}
-}
-
-func handleRelationshipsResult(m appModel, msg models.RelationshipsResult) (appModel, tea.Cmd) {
-	if msg.Err != nil {
-		m.Err = msg.Err
-		return m, nil
-	}
-	// columns: From Table, From Column, To Table, To Column, Constraint Name
-	cols := []table.Column{
-		{Title: "From Table", Width: 20},
-		{Title: "From Column", Width: 20},
-		{Title: "To Table", Width: 20},
-		{Title: "To Column", Width: 20},
-		{Title: "Constraint Name", Width: 25},
-	}
-	rows := make([]table.Row, len(msg.Relationships))
-	for i, rel := range msg.Relationships {
-		rows[i] = table.Row(rel)
-	}
-	m.RelationshipsTable = table.New(
-		table.WithColumns(cols),
-		table.WithRows(rows),
-		table.WithFocused(true),
-		table.WithHeight(10),
-	)
-	m.RelationshipsTable.SetStyles(styles.GetBlueTableStyles())
-	m.State = models.RelationshipsView
-	return m, nil
-}
-
-// Helper functions
-
-// Helper function to clear results after a timeout
-func clearResultAfterTimeout() tea.Cmd {
-	return tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
-		return models.ClearResultMsg{}
-	})
-}
-
-// saveFieldEdit creates and executes an UPDATE statement for the edited field
-func saveFieldEdit(m appModel, newValue string) tea.Cmd {
-	return tea.Cmd(func() tea.Msg {
-		// Find the primary key column and value for the WHERE clause
-		var primaryKeyColumn, primaryKeyValue string
-
-		// Look for common primary key column names
-		for i, col := range m.DataPreviewAllColumns {
-			if col == "id" || col == "Id" || col == "ID" {
-				if i < len(m.SelectedRowData) {
-					primaryKeyColumn = col
-					primaryKeyValue = m.SelectedRowData[i]
-					break
-				}
-			}
-		}
-
-		// If no 'id' column found, try other common patterns
-		if primaryKeyColumn == "" {
-			for i, col := range m.DataPreviewAllColumns {
-				colLower := strings.ToLower(col)
-				if strings.HasSuffix(colLower, "_id") || strings.HasSuffix(colLower, "id") {
-					if i < len(m.SelectedRowData) {
-						primaryKeyColumn = col
-						primaryKeyValue = m.SelectedRowData[i]
-						break
-					}
-				}
-			}
-		}
-
-		if primaryKeyColumn == "" {
-			return models.FieldUpdateResult{
-				Success:  false,
-				Err:      fmt.Errorf("no primary key column found for safe update"),
-				ExitEdit: false,
-			}
-		}
-
-		// Build UPDATE SQL statement
-		var updateSQL string
-		switch m.SelectedDB.Driver {
-		case "postgres":
-			updateSQL = fmt.Sprintf(`UPDATE "%s"."%s" SET "%s" = $1 WHERE "%s" = $2`,
-				m.SelectedSchema, m.SelectedTable, m.EditingFieldName, primaryKeyColumn)
-		case "mysql":
-			updateSQL = fmt.Sprintf("UPDATE `%s`.`%s` SET `%s` = ? WHERE `%s` = ?",
-				m.SelectedSchema, m.SelectedTable, m.EditingFieldName, primaryKeyColumn)
-		case "sqlite3":
-			updateSQL = fmt.Sprintf(`UPDATE "%s" SET "%s" = ? WHERE "%s" = ?`,
-				m.SelectedTable, m.EditingFieldName, primaryKeyColumn)
-		default:
-			return models.FieldUpdateResult{
-				Success:  false,
-				Err:      fmt.Errorf("unsupported database driver: %s", m.SelectedDB.Driver),
-				ExitEdit: false,
-			}
-		}
-
-		// Execute the UPDATE statement
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		result, err := m.DB.ExecContext(ctx, updateSQL, newValue, primaryKeyValue)
-		if err != nil {
-			return models.FieldUpdateResult{
-				Success:  false,
-				Err:      fmt.Errorf("failed to update field: %v", err),
-				ExitEdit: false,
-			}
-		}
-
-		rowsAffected, err := result.RowsAffected()
-		if err != nil {
-			return models.FieldUpdateResult{
-				Success:  false,
-				Err:      fmt.Errorf("failed to get affected rows: %v", err),
-				ExitEdit: false,
-			}
-		}
-
-		if rowsAffected == 0 {
-			return models.FieldUpdateResult{
-				Success:  false,
-				Err:      fmt.Errorf("no rows were updated - record may not exist"),
-				ExitEdit: false,
-			}
-		}
-
-		return models.FieldUpdateResult{
-			Success:  true,
-			ExitEdit: true,
-			NewValue: newValue,
-		}
-	})
-}
-
-func updateSavedConnectionsList(m appModel) appModel {
-	savedItems := make([]list.Item, len(m.SavedConnections))
-	for i, conn := range m.SavedConnections {
-		connStr := conn.ConnectionStr
-		if len(connStr) > 50 {
-			connStr = connStr[:50] + "..."
-		}
-		savedItems[i] = models.Item{
-			ItemTitle: conn.Name,
-			ItemDesc:  fmt.Sprintf("%s - %s", conn.Driver, connStr),
-		}
-	}
-	m.SavedConnectionsList.SetItems(savedItems)
-	return m
-}
-
 func main() {
 	m := appModel{Model: initialModel()}
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -1491,7 +907,7 @@ func (d fieldItemDelegate) Render(w io.Writer, m list.Model, index int, it list.
 	}
 
 	// Determine type and simple prefix when selected
-	t := inferFieldType(fi.Value)
+	t := utils.InferFieldType(fi.Value)
 	prefix := "  "
 	if index == m.Index() {
 		prefix = "> "
@@ -1505,14 +921,14 @@ func (d fieldItemDelegate) Render(w io.Writer, m list.Model, index int, it list.
 	spaceBeforeBadge := 1
 
 	// Sanitize value to single line to prevent layout issues
-	single := strings.Join(strings.Fields(fi.Value), " ")
+	single := utils.SanitizeValueForDisplay(fi.Value)
 
 	// Budget for value so type is always shown (use display widths)
 	budget := width - lipgloss.Width(prefix) - lipgloss.Width(namePart) - spaceBeforeBadge - lipgloss.Width(badge)
 	if budget < 0 {
 		budget = 0
 	}
-	val := ansi.Truncate(single, budget, "...")
+	val := utils.TruncateWithEllipsis(single, budget, "...")
 
 	line := prefix + namePart + val + strings.Repeat(" ", spaceBeforeBadge) + badge
 
@@ -1521,68 +937,4 @@ func (d fieldItemDelegate) Render(w io.Writer, m list.Model, index int, it list.
 		line = styles.FocusedStyle.Render(line)
 	}
 	fmt.Fprint(w, line)
-}
-
-// inferFieldType returns a simple type label based on content heuristics.
-func inferFieldType(v string) string {
-	if v == "NULL" {
-		return "NULL"
-	}
-	if v == "" {
-		return "Text"
-	}
-	// Boolean
-	if v == "true" || v == "false" || v == "TRUE" || v == "FALSE" {
-		return "Bool"
-	}
-	// Numeric
-	if _, err := strconv.ParseInt(v, 10, 64); err == nil {
-		return "Int"
-	}
-	if _, err := strconv.ParseFloat(v, 64); err == nil {
-		return "Float"
-	}
-	// JSON
-	s := strings.TrimSpace(v)
-	if (strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}")) || (strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]")) {
-		return "JSON"
-	}
-	// DateTime: try to parse with common layouts instead of loose punctuation checks
-	if looksLikeDateTime(strings.TrimSpace(v)) {
-		return "DateTime"
-	}
-	return "Text"
-}
-
-// looksLikeDateTime attempts parsing with common datetime layouts
-func looksLikeDateTime(s string) bool {
-	if s == "" {
-		return false
-	}
-	// Avoid obviously long textual content
-	if len(s) > 64 {
-		return false
-	}
-	layouts := []string{
-		time.RFC3339,
-		time.RFC3339Nano,
-		time.RFC1123,
-		time.RFC1123Z,
-		time.RFC822,
-		time.RFC822Z,
-		time.RFC850,
-		time.RubyDate,
-		"2006-01-02 15:04:05 -0700 MST",
-		"2006-01-02 15:04:05 MST",
-		"2006-01-02 15:04:05.000 -0700 MST",
-		"2006-01-02 15:04:05.000",
-		"2006-01-02 15:04:05",
-		"2006-01-02",
-	}
-	for _, layout := range layouts {
-		if _, err := time.Parse(layout, s); err == nil {
-			return true
-		}
-	}
-	return false
 }

@@ -6,6 +6,7 @@
   - `database/` (DB queries and adapters)
   - `models/` (core types and state)
   - `styles/` (theme/styling)
+  - `utils/` (helper functions and utilities)
   - `views/` (UI view rendering)
 - Root `main.go`: main entry point with app logic and update handlers.
 - Tests: alongside code as `*_test.go`.
@@ -24,10 +25,11 @@ dbx/
 │   ├── database/               # Database operations and adapters
 │   ├── models/                 # Core types and interfaces
 │   ├── styles/                 # UI theming
+│   ├── utils/                  # Helper functions and utilities
 │   └── views/                  # UI view rendering
 ```
 - Core states: `dbTypeView`, `connectionView`, `schemaView`, `tablesView`, `columnsView`, `queryView`, `queryHistoryView`.
-- Package roles: `config` (persistence), `database` (queries), `models` (types), `styles` (theme), `views` (rendering).
+- Package roles: `config` (persistence), `database` (queries), `models` (types), `styles` (theme), `utils` (helpers), `views` (rendering).
 - Update logic: implemented in `main.go` via `appModel` wrapper pattern (Go best practice for extending models from other packages).
 - Key deps: `bubbletea`, `bubbles`, `lipgloss`; DB drivers: `lib/pq`, `go-sql-driver/mysql`, `mattn/go-sqlite3`.
 
@@ -62,8 +64,23 @@ dbx/
 - Files: `snake_case.go` by feature (e.g., `operations.go`, `storage.go`).
 - Exports: `CamelCase`; unexported: `lowerCamel`.
 - Errors: wrap with context (e.g., `fmt.Errorf("op failed: %w", err)`).
-- Separation: DB in `database`, shared types in `models`, UI in `views`.
+- Separation: DB in `database`, shared types in `models`, UI in `views`, helpers in `utils`.
 - File size: keep each source file under 500 lines; refactor when approaching.
+
+## Utils Package Guidelines
+- **Purpose**: Central location for reusable helper functions across the application
+- **Organization**: Functions grouped by domain (database, UI, data processing, etc.)
+- **Structure**:
+  - `database.go` - Schema detection, SQL generation, primary key utilities
+  - `data.go` - Data processing, sorting, table/list item creation
+  - `ui.go` - UI component creation, table building, column width calculation
+  - `math.go` - Mathematical operations (min/max, pagination)
+  - `types.go` - Type inference, datetime detection, value sanitization
+  - `timeout.go` - Async command utilities with timeouts
+- **Testing**: Each utils file must have corresponding `*_test.go` file
+- **Dependencies**: Utils should not depend on main application state or complex models
+- **Exports**: All utility functions must be exported (capitalized) and documented
+- **Error Handling**: Return errors rather than panicking; validate inputs appropriately
 
 ## Navigation Controls
 - Arrows: navigate lists/tables; `Enter`: select; `Esc`: back.

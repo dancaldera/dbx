@@ -28,10 +28,22 @@ dbx/
 │   ├── database/               # Database operations and adapters
 │   ├── models/                 # Core types and interfaces
 │   ├── styles/                 # UI theming
+│   ├── utils/                  # Helper functions and utilities
 │   └── views/                  # UI view rendering
 ```
 
-DBX follows a clean, modular architecture with well-separated concerns across configuration management, database operations, type definitions, UI styling, and view rendering. The main application logic and Bubble Tea update handlers are implemented in `main.go` using the `appModel` wrapper pattern.
+DBX follows a clean, modular architecture with well-separated concerns across configuration management, database operations, type definitions, UI styling, utility functions, and view rendering. The main application logic and Bubble Tea update handlers are implemented in `main.go` using the `appModel` wrapper pattern.
+
+### Utils Package
+
+The `utils` package provides centralized helper functions organized by domain:
+
+- **Database utilities**: Schema detection, SQL generation, primary key finding
+- **Data processing**: Sorting parameters, table info creation, list management
+- **UI utilities**: Table creation, column width calculation, list updates
+- **Mathematical utilities**: Min/max functions, pagination calculations
+- **Type inference**: Data type detection, datetime parsing, value sanitization
+- **Timeout utilities**: Async command helpers with timeouts
 
 
 ## Installation

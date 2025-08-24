@@ -1,0 +1,273 @@
+package utils
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/dancaldera/dbx/internal/database"
+	"github.com/dancaldera/dbx/internal/models"
+)
+
+// GetDefaultSchema returns the default schema name for a database driver
+func GetDefaultSchema(driver string) string {
+	switch driver {
+	case "mysql":
+		return "mysql"
+	case "sqlite3":
+		return "main"
+	default: // postgres
+		return "public"
+	}
+}
+
+// BuildUpdateSQL generates database-specific UPDATE SQL statement
+func BuildUpdateSQL(driver, schema, table, field, primaryKey string) string {
+	switch driver {
+	case "postgres":
+		return fmt.Sprintf(`UPDATE "%s"."%s" SET "%s" = $1 WHERE "%s" = $2`,
+			schema, table, field, primaryKey)
+	case "mysql":
+		return fmt.Sprintf("UPDATE `%s`.`%s` SET `%s` = ? WHERE `%s` = ?",
+			schema, table, field, primaryKey)
+	case "sqlite3":
+		return fmt.Sprintf(`UPDATE "%s" SET "%s" = ? WHERE "%s" = ?`,
+			table, field, primaryKey)
+	default:
+		return fmt.Sprintf(`UPDATE "%s"."%s" SET "%s" = $1 WHERE "%s" = $2`,
+			schema, table, field, primaryKey)
+	}
+}
+
+// FindPrimaryKeyColumn locates primary key column and value from row data
+func FindPrimaryKeyColumn(columns []string, rowData []string) (string, string, error) {
+	// Look for common primary key patterns
+	for i, col := range columns {
+		if col == "id" || col == "Id" || col == "ID" {
+			if i < len(rowData) {
+				return col, rowData[i], nil
+			}
+		}
+	}
+
+	// Try secondary patterns
+	for i, col := range columns {
+		colLower := strings.ToLower(col)
+		if strings.HasSuffix(colLower, "_id") || strings.HasSuffix(colLower, "id") {
+			if i < len(rowData) {
+				return col, rowData[i], nil
+			}
+		}
+	}
+
+	return "", "", fmt.Errorf("no primary key column found in %d columns", len(columns))
+}
+
+// ConnectToDB establishes database connection and loads tables
+func ConnectToDB(selectedDB models.DBType, connectionStr string) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		db, err := sql.Open(selectedDB.Driver, connectionStr)
+		if err != nil {
+			return models.ConnectResult{Err: err}
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		err = db.PingContext(ctx)
+		if err != nil {
+			db.Close()
+			return models.ConnectResult{Err: err}
+		}
+
+		tables, err := database.GetTables(db, selectedDB.Driver)
+		if err != nil {
+			db.Close()
+			return models.ConnectResult{Err: err}
+		}
+
+		schema := GetDefaultSchema(selectedDB.Driver)
+
+		return models.ConnectResult{
+			DB:     db,
+			Driver: selectedDB.Driver,
+			Tables: tables,
+			Schema: schema,
+		}
+	})
+}
+
+// LoadColumns loads column information for a table
+func LoadColumns(db *sql.DB, selectedDB models.DBType, selectedTable, selectedSchema string) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		columns, err := database.GetColumns(db, selectedDB.Driver, selectedTable, selectedSchema)
+		return models.ColumnsResult{
+			Columns: columns,
+			Err:     err,
+		}
+	})
+}
+
+// LoadDataPreview loads table data preview with pagination and sorting
+func LoadDataPreview(db *sql.DB, selectedDB models.DBType, selectedTable, selectedSchema string, itemsPerPage int, sortDirection models.SortDirection, sortColumn string) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		// Reset pagination and load first page
+		totalRows, err := database.GetTableRowCount(db, selectedDB.Driver, selectedTable, selectedSchema)
+		if err != nil {
+			return models.DataPreviewResult{Columns: nil, Rows: nil, Err: err}
+		}
+
+		// Determine sort parameters
+		sortCol, sortDir := DetermineSortParameters(sortDirection, sortColumn)
+
+		cols, rows, err := database.GetTablePreviewPaginatedWithSort(db, selectedDB.Driver, selectedTable, selectedSchema, itemsPerPage, 0, sortCol, sortDir)
+		return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: totalRows}
+	})
+}
+
+// LoadDataPreviewWithPagination loads data with pagination support
+func LoadDataPreviewWithPagination(db *sql.DB, selectedDB models.DBType, selectedTable, selectedSchema string, itemsPerPage, currentPage int, sortDirection models.SortDirection, sortColumn, filterValue string, allColumns []string, totalRows int) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		// Determine sort parameters
+		sortCol, sortDir := DetermineSortParameters(sortDirection, sortColumn)
+
+		offset := currentPage * itemsPerPage
+		if filterValue != "" {
+			cols, rows, err := database.GetTablePreviewPaginatedWithFilterAndSort(db, selectedDB.Driver, selectedTable, selectedSchema, itemsPerPage, offset, filterValue, allColumns, sortCol, sortDir)
+			return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: totalRows}
+		}
+		cols, rows, err := database.GetTablePreviewPaginatedWithSort(db, selectedDB.Driver, selectedTable, selectedSchema, itemsPerPage, offset, sortCol, sortDir)
+		return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: totalRows}
+	})
+}
+
+// LoadDataPreviewWithFilter loads data with filter applied
+func LoadDataPreviewWithFilter(db *sql.DB, selectedDB models.DBType, selectedTable, selectedSchema string, itemsPerPage int, filterValue string, allColumns []string, sortDirection models.SortDirection, sortColumn string) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		// Get total rows with filter
+		totalRows, err := database.GetTableRowCountWithFilter(db, selectedDB.Driver, selectedTable, selectedSchema, filterValue, allColumns)
+		if err != nil {
+			return models.DataPreviewResult{Columns: nil, Rows: nil, Err: err}
+		}
+
+		// Determine sort parameters
+		sortCol, sortDir := DetermineSortParameters(sortDirection, sortColumn)
+
+		// Get filtered and sorted data
+		cols, rows, err := database.GetTablePreviewPaginatedWithFilterAndSort(db, selectedDB.Driver, selectedTable, selectedSchema, itemsPerPage, 0, filterValue, allColumns, sortCol, sortDir)
+		return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: totalRows}
+	})
+}
+
+// LoadDataPreviewWithSort loads data with sorting applied
+func LoadDataPreviewWithSort(db *sql.DB, selectedDB models.DBType, selectedTable, selectedSchema string, itemsPerPage, currentPage int, sortDirection models.SortDirection, sortColumn, filterValue string, allColumns []string, totalRows int) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		// Determine sort parameters
+		sortCol, sortDir := DetermineSortParameters(sortDirection, sortColumn)
+
+		offset := currentPage * itemsPerPage
+
+		// Use appropriate function based on whether filter is active
+		if filterValue != "" {
+			cols, rows, err := database.GetTablePreviewPaginatedWithFilterAndSort(db, selectedDB.Driver, selectedTable, selectedSchema, itemsPerPage, offset, filterValue, allColumns, sortCol, sortDir)
+			return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: totalRows}
+		} else {
+			cols, rows, err := database.GetTablePreviewPaginatedWithSort(db, selectedDB.Driver, selectedTable, selectedSchema, itemsPerPage, offset, sortCol, sortDir)
+			return models.DataPreviewResult{Columns: cols, Rows: rows, Err: err, TotalRows: totalRows}
+		}
+	})
+}
+
+// LoadRelationships loads foreign key relationships
+func LoadRelationships(db *sql.DB, selectedDB models.DBType, selectedSchema string) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		rels, err := database.GetForeignKeyRelationships(db, selectedDB.Driver, selectedSchema)
+		return models.RelationshipsResult{Relationships: rels, Err: err}
+	})
+}
+
+// SaveFieldEdit creates and executes an UPDATE statement for the edited field
+func SaveFieldEdit(db *sql.DB, selectedDB models.DBType, selectedSchema, selectedTable, editingFieldName string, allColumns, selectedRowData []string, editingFieldIndex int, newValue string) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		// Find the primary key column and value for the WHERE clause
+		primaryKeyColumn, primaryKeyValue, err := FindPrimaryKeyColumn(allColumns, selectedRowData)
+		if err != nil {
+			return models.FieldUpdateResult{
+				Success:  false,
+				Err:      err,
+				ExitEdit: false,
+			}
+		}
+
+		// Build UPDATE SQL statement
+		updateSQL := BuildUpdateSQL(selectedDB.Driver, selectedSchema, selectedTable, editingFieldName, primaryKeyColumn)
+
+		// Execute the UPDATE statement
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		result, err := db.ExecContext(ctx, updateSQL, newValue, primaryKeyValue)
+		if err != nil {
+			return models.FieldUpdateResult{
+				Success:  false,
+				Err:      fmt.Errorf("failed to update field: %v", err),
+				ExitEdit: false,
+			}
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return models.FieldUpdateResult{
+				Success:  false,
+				Err:      fmt.Errorf("failed to get affected rows: %v", err),
+				ExitEdit: false,
+			}
+		}
+
+		if rowsAffected == 0 {
+			return models.FieldUpdateResult{
+				Success:  false,
+				Err:      fmt.Errorf("no rows were updated - record may not exist"),
+				ExitEdit: false,
+			}
+		}
+
+		return models.FieldUpdateResult{
+			Success:  true,
+			ExitEdit: true,
+			NewValue: newValue,
+		}
+	})
+}
+
+// HandleConnectResult processes database connection result and updates model
+func HandleConnectResult(m models.Model, msg models.ConnectResult) models.Model {
+	updatedModel := m
+	updatedModel.IsConnecting = false
+
+	if msg.Err != nil {
+		updatedModel.Err = msg.Err
+		return updatedModel
+	}
+
+	updatedModel.DB = msg.DB
+	updatedModel.Tables = msg.Tables
+	updatedModel.SelectedSchema = msg.Schema
+
+	// Sort tables alphabetically
+	sort.Strings(updatedModel.Tables)
+
+	// Create simple table infos
+	updatedModel.TableInfos = CreateTableInfos(updatedModel.Tables, updatedModel.SelectedSchema)
+
+	// Update tables list (show only table names)
+	items := CreateTableListItems(updatedModel.TableInfos)
+	updatedModel.TablesList.SetItems(items)
+
+	updatedModel.State = models.TablesView
+	return updatedModel
+}
