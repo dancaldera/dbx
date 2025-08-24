@@ -1,49 +1,132 @@
 package utils
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/dancaldera/dbx/internal/models"
 	"github.com/dancaldera/dbx/internal/styles"
 )
 
-// CalculateColumnWidths computes optimal column widths based on content
+// CalculateColumnWidths computes optimal column widths with improved distribution
 func CalculateColumnWidths(columns []string, rows [][]string) []int {
 	colWidths := make([]int, len(columns))
 
-	// Initialize with header lengths
+	// Track content type and lengths for better width allocation
+	columnTypes := make([]string, len(columns))
+	maxLengths := make([]int, len(columns))
+	avgLengths := make([]float64, len(columns))
+
+	// Initialize with header lengths (add space for sort indicators)
 	for i, col := range columns {
-		colWidths[i] = len(col)
+		colWidths[i] = len(col) + 2 // Extra space for sort arrows
+		maxLengths[i] = len(col)
 	}
 
-	// Single pass through all data
+	// Analyze column content to determine optimal widths
 	for _, row := range rows {
 		for i, cell := range row {
 			if i < len(colWidths) {
 				cellLength := len(cell)
-				if cellLength > 40 {
-					cellLength = 40 // Cap at maximum display width
+
+				// Infer column type for better width allocation
+				if i < len(columnTypes) && columnTypes[i] == "" {
+					if cellLength == 0 {
+						columnTypes[i] = "empty"
+					} else if IsNumeric(cell) {
+						columnTypes[i] = "numeric"
+					} else if IsDateLike(cell) {
+						columnTypes[i] = "date"
+					} else if IsBooleanLike(cell) {
+						columnTypes[i] = "boolean"
+					} else if cellLength > 50 {
+						columnTypes[i] = "text"
+					} else {
+						columnTypes[i] = "string"
+					}
 				}
-				if cellLength > colWidths[i] {
-					colWidths[i] = cellLength
+
+				// Track statistics
+				if cellLength > maxLengths[i] {
+					maxLengths[i] = cellLength
 				}
+				avgLengths[i] = (avgLengths[i] + float64(cellLength)) / 2
 			}
 		}
 	}
 
-	// Apply minimum width constraints
+	// Apply intelligent width allocation based on content type
 	for i := range colWidths {
-		if colWidths[i] < 8 {
-			colWidths[i] = 8
-		} else if colWidths[i] > 40 {
-			colWidths[i] = 40
+		contentType := columnTypes[i]
+		maxLen := maxLengths[i]
+		avgLen := int(avgLengths[i])
+
+		switch contentType {
+		case "boolean":
+			colWidths[i] = Min(Max(8, len(columns[i])+2), 10)
+		case "numeric":
+			colWidths[i] = Min(Max(10, maxLen+1), 15)
+		case "date":
+			colWidths[i] = Min(Max(12, maxLen), 20)
+		case "empty":
+			colWidths[i] = Max(8, len(columns[i])+2)
+		case "string":
+			// Use average length with some padding, but cap reasonably
+			target := Max(avgLen+3, len(columns[i])+2)
+			colWidths[i] = Min(Max(target, 12), 35)
+		case "text":
+			// Long text gets more space but still capped
+			target := Max(avgLen/2+10, len(columns[i])+2)
+			colWidths[i] = Min(Max(target, 20), 45)
+		default:
+			// Fallback to original logic
+			colWidths[i] = Min(Max(maxLen, len(columns[i])+2), 40)
+		}
+
+		// Ensure minimum and maximum bounds
+		if colWidths[i] < 6 {
+			colWidths[i] = 6
+		} else if colWidths[i] > 60 {
+			colWidths[i] = 60
 		}
 	}
 
 	return colWidths
 }
 
-// CreateVisibleColumnsAndRows handles horizontal scrolling for tables
-func CreateVisibleColumnsAndRows(columns []string, rows [][]string, scrollOffset, visibleCols int, colWidths []int) ([]table.Column, []table.Row) {
+// IsNumeric checks if a string represents a number
+func IsNumeric(s string) bool {
+	if s == "" || s == "NULL" {
+		return false
+	}
+	// Simple check for numeric content
+	for _, char := range s {
+		if !((char >= '0' && char <= '9') || char == '.' || char == '-' || char == '+' || char == 'e' || char == 'E') {
+			return false
+		}
+	}
+	return true
+}
+
+// IsDateLike checks if a string looks like a date/timestamp
+func IsDateLike(s string) bool {
+	if len(s) < 8 || s == "NULL" {
+		return false
+	}
+	// Look for common date patterns
+	return strings.Contains(s, "-") && (strings.Contains(s, ":") || len(s) >= 10)
+}
+
+// IsBooleanLike checks if a string represents a boolean
+func IsBooleanLike(s string) bool {
+	lower := strings.ToLower(s)
+	return lower == "true" || lower == "false" || lower == "t" || lower == "f" ||
+		lower == "yes" || lower == "no" || lower == "y" || lower == "n" ||
+		lower == "1" || lower == "0"
+}
+
+// CreateVisibleColumnsAndRows handles horizontal scrolling for tables with enhanced UX
+func CreateVisibleColumnsAndRows(columns []string, rows [][]string, scrollOffset, visibleCols int, colWidths []int, sortColumn string, sortDirection models.SortDirection) ([]table.Column, []table.Row) {
 	if len(columns) == 0 || scrollOffset >= len(columns) {
 		return []table.Column{}, []table.Row{}
 	}
@@ -54,14 +137,26 @@ func CreateVisibleColumnsAndRows(columns []string, rows [][]string, scrollOffset
 		endCol = len(columns)
 	}
 
-	// Build visible columns
+	// Build visible columns with enhanced headers
 	visibleColumns := columns[scrollOffset:endCol]
 	cols := make([]table.Column, len(visibleColumns))
 	for i, c := range visibleColumns {
-		cols[i] = table.Column{Title: c, Width: colWidths[scrollOffset+i]}
+		columnTitle := c
+
+		// Add sorting indicators to column headers
+		if c == sortColumn {
+			switch sortDirection {
+			case models.SortAsc:
+				columnTitle = c + " ↑"
+			case models.SortDesc:
+				columnTitle = c + " ↓"
+			}
+		}
+
+		cols[i] = table.Column{Title: columnTitle, Width: colWidths[scrollOffset+i]}
 	}
 
-	// Build visible rows with content truncation per computed column width
+	// Build visible rows with smarter content truncation
 	tableRows := make([]table.Row, len(rows))
 	for i, r := range rows {
 		visibleCells := make(table.Row, len(visibleColumns))
@@ -70,18 +165,32 @@ func CreateVisibleColumnsAndRows(columns []string, rows [][]string, scrollOffset
 			if colIndex < len(r) {
 				cell := r[colIndex]
 				maxW := colWidths[colIndex]
+
+				// Enhanced truncation logic for better readability
 				if len(cell) > maxW {
-					ellipsis := 0
-					if maxW >= 3 {
-						ellipsis = 3
-					}
-					trim := Max(0, maxW-ellipsis)
-					if trim <= 0 {
-						visibleCells[j] = ""
-					} else if ellipsis > 0 {
-						visibleCells[j] = cell[:trim] + "..."
+					if maxW <= 8 {
+						// Very narrow columns: show first few chars
+						visibleCells[j] = cell[:Max(1, maxW-1)] + "…"
+					} else if maxW <= 15 {
+						// Narrow columns: smart truncation
+						if len(cell) <= maxW+3 {
+							visibleCells[j] = cell // Don't truncate if just slightly over
+						} else {
+							visibleCells[j] = cell[:maxW-2] + "…"
+						}
 					} else {
-						visibleCells[j] = cell[:trim]
+						// Wider columns: show more content with better ellipsis
+						if strings.Contains(cell, " ") && len(cell) > maxW {
+							// Try to break at word boundaries
+							truncated := cell[:maxW-1]
+							if lastSpace := strings.LastIndex(truncated, " "); lastSpace > maxW/2 {
+								visibleCells[j] = truncated[:lastSpace] + "…"
+							} else {
+								visibleCells[j] = truncated + "…"
+							}
+						} else {
+							visibleCells[j] = cell[:maxW-1] + "…"
+						}
 					}
 				} else {
 					visibleCells[j] = cell
@@ -134,8 +243,8 @@ func CreateDataPreviewTable(m models.Model) models.Model {
 		visibleCount = 0
 	}
 
-	// Create visible columns and rows
-	cols, rows := CreateVisibleColumnsAndRows(m.DataPreviewAllColumns, m.DataPreviewAllRows, startCol, visibleCount, colWidths)
+	// Create visible columns and rows with sorting indicators
+	cols, rows := CreateVisibleColumnsAndRows(m.DataPreviewAllColumns, m.DataPreviewAllRows, startCol, visibleCount, colWidths, m.DataPreviewSortColumn, m.DataPreviewSortDirection)
 
 	// Compute dynamic height to use remaining vertical space
 	reserved := 10 // Title + info + help, approximate

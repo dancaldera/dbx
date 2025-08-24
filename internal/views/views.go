@@ -327,15 +327,16 @@ func QueryHistoryView(m models.Model) string {
 	return styles.DocStyle.Render(content + "\n" + helpText)
 }
 
-// DataPreviewView renders the table data preview screen
+// DataPreviewView renders the enhanced table data preview screen
 func DataPreviewView(m models.Model) string {
-	// Add title with table name
-	title := fmt.Sprintf("%s", m.SelectedTable)
+	// Enhanced title with table icon and name
+	tableIcon := "📊"
+	title := fmt.Sprintf("%s  %s", tableIcon, m.SelectedTable)
 	content := styles.TitleStyle.Render(title)
 
-	// Show status messages (loading, success, error)
+	// Show status messages with improved styling
 	if m.IsExporting {
-		content += "\n⏳ Exporting data..."
+		content += "\n" + styles.LoadingStyle.Render("⏳ Exporting data...")
 	} else if m.Err != nil {
 		content += "\n" + styles.ErrorStyle.Render("❌ Error: "+m.Err.Error())
 	} else if m.QueryResult != "" {
@@ -344,54 +345,82 @@ func DataPreviewView(m models.Model) string {
 
 	// Only show the table if it has both columns and rows
 	if len(m.DataPreviewTable.Columns()) > 0 && len(m.DataPreviewTable.Rows()) > 0 {
-		// Calculate pagination info
+		// Calculate pagination info with better formatting
 		totalPages := (m.DataPreviewTotalRows + m.DataPreviewItemsPerPage - 1) / m.DataPreviewItemsPerPage
 		if totalPages == 0 {
 			totalPages = 1
 		}
-		currentPage := m.DataPreviewCurrentPage + 1 // Display as 1-based
+		currentPage := m.DataPreviewCurrentPage + 1
 
 		// Calculate current row range
 		startRow := (m.DataPreviewCurrentPage * m.DataPreviewItemsPerPage) + 1
 		endRow := startRow + len(m.DataPreviewTable.Rows()) - 1
 
-		// Show table information
-		var tableInfo string
-		var sortInfo string
+		// Enhanced table metadata with better visual hierarchy
+		var statusLine strings.Builder
+
+		// Table name and filter status
+		if m.DataPreviewFilterValue != "" {
+			statusLine.WriteString(fmt.Sprintf("📋 %s (filtered: '%s')", m.SelectedTable, m.DataPreviewFilterValue))
+		} else {
+			statusLine.WriteString(fmt.Sprintf("📋 %s", m.SelectedTable))
+		}
+
+		// Row information with visual indicators
+		statusLine.WriteString(fmt.Sprintf(" • 📄 Rows %d-%d of %d", startRow, endRow, m.DataPreviewTotalRows))
+
+		// Page navigation with arrows
+		if totalPages > 1 {
+			var pageIndicator string
+			if currentPage > 1 {
+				pageIndicator += "← "
+			}
+			pageIndicator += fmt.Sprintf("Page %d/%d", currentPage, totalPages)
+			if currentPage < totalPages {
+				pageIndicator += " →"
+			}
+			statusLine.WriteString(" • " + pageIndicator)
+		}
+
+		// Sort status with enhanced indicators
 		if m.DataPreviewSortColumn != "" {
+			var sortIcon string
 			switch m.DataPreviewSortDirection {
 			case models.SortAsc:
-				sortInfo = fmt.Sprintf(" • Sorted by %s ↑", m.DataPreviewSortColumn)
+				sortIcon = "🔼"
 			case models.SortDesc:
-				sortInfo = fmt.Sprintf(" • Sorted by %s ↓", m.DataPreviewSortColumn)
+				sortIcon = "🔽"
 			}
+			statusLine.WriteString(fmt.Sprintf(" • %s %s", sortIcon, m.DataPreviewSortColumn))
 		}
 
-		if m.DataPreviewFilterValue != "" {
-			tableInfo = fmt.Sprintf("Table: %s (filtered: '%s') • Rows %d-%d of %d • Page %d/%d%s",
-				m.SelectedTable, m.DataPreviewFilterValue, startRow, endRow, m.DataPreviewTotalRows, currentPage, totalPages, sortInfo)
-		} else {
-			tableInfo = fmt.Sprintf("Table: %s • Rows %d-%d of %d • Page %d/%d%s",
-				m.SelectedTable, startRow, endRow, m.DataPreviewTotalRows, currentPage, totalPages, sortInfo)
-		}
-		content += "\n" + tableInfo
+		content += "\n" + styles.InfoStyle.Render(statusLine.String())
 
-		// Show column scroll indicator
+		// Enhanced column scroll indicator with scroll arrows
 		totalCols := len(m.DataPreviewAllColumns)
-		startCol := m.DataPreviewScrollOffset + 1 // 1-based for display
+		startCol := m.DataPreviewScrollOffset + 1
 		endCol := m.DataPreviewScrollOffset + m.DataPreviewVisibleCols
 		if endCol > totalCols {
 			endCol = totalCols
 		}
 
-		visibleRows := len(m.DataPreviewTable.Rows())
-		columnInfo := fmt.Sprintf("Columns %d-%d of %d • %d rows visible",
-			startCol, endCol, totalCols, visibleRows)
-		content += "\n" + columnInfo
+		var columnLine strings.Builder
+		if m.DataPreviewScrollOffset > 0 {
+			columnLine.WriteString("← ")
+		}
+		columnLine.WriteString(fmt.Sprintf("📊 Columns %d-%d of %d", startCol, endCol, totalCols))
+		if endCol < totalCols {
+			columnLine.WriteString(" →")
+		}
 
-		// Show filter input if active
+		visibleRows := len(m.DataPreviewTable.Rows())
+		columnLine.WriteString(fmt.Sprintf(" • %d rows visible", visibleRows))
+
+		content += "\n" + styles.SubtitleStyle.Render(columnLine.String())
+
+		// Enhanced filter input with better styling
 		if m.DataPreviewFilterActive {
-			filterLabel := "🔍 Filter:"
+			filterLabel := styles.SubtitleStyle.Render("🔍 Filter:")
 			var filterField string
 			if m.DataPreviewFilterInput.Focused() {
 				filterField = styles.InputFocusedStyle.Render(m.DataPreviewFilterInput.View())
@@ -401,41 +430,64 @@ func DataPreviewView(m models.Model) string {
 			content += "\n" + filterLabel + " " + filterField
 		}
 
-		// Show sort mode indicator if active
+		// Enhanced sort mode indicator with column highlighting
 		if m.DataPreviewSortMode {
 			var sortModeInfo string
 			if m.DataPreviewSortColumn != "" {
-				sortModeInfo = fmt.Sprintf("🔄 Sort Mode: Column '%s' selected", m.DataPreviewSortColumn)
+				currentDirection := "off"
+				nextDirection := "ascending"
+				switch m.DataPreviewSortDirection {
+				case models.SortOff:
+					currentDirection = "off"
+					nextDirection = "ascending"
+				case models.SortAsc:
+					currentDirection = "ascending 🔼"
+					nextDirection = "descending"
+				case models.SortDesc:
+					currentDirection = "descending 🔽"
+					nextDirection = "off"
+				}
+				sortModeInfo = fmt.Sprintf("🎯 Sort Mode: '%s' (%s) → Press ENTER for %s",
+					m.DataPreviewSortColumn, currentDirection, nextDirection)
 			} else {
-				sortModeInfo = "🔄 Sort Mode: Select column with ↑/↓"
+				sortModeInfo = "🎯 Sort Mode: Use ↑/↓ to select column, ENTER to sort"
 			}
-			content += "\n" + styles.InfoStyle.Render(sortModeInfo)
+			content += "\n" + styles.WarningStyle.Render(sortModeInfo)
 		}
 
+		// Add visual separator before table
+		content += "\n" + strings.Repeat("─", 80)
 		content += "\n" + m.DataPreviewTable.View()
+
+		// Add visual separator after table for better separation
+		content += "\n" + strings.Repeat("─", 80)
+
 	} else if m.Err == nil && m.QueryResult == "" && !m.IsExporting {
-		content += "\n" + "No data to display"
+		content += "\n" + styles.InfoStyle.Render("📭 No data to display")
 	}
 
+	// Enhanced help text with better grouping and visual hierarchy
 	var helpText string
 	if m.DataPreviewFilterActive {
 		helpText = styles.HelpStyle.Render(
-			styles.KeyStyle.Render("enter") + ": apply filter • " +
-				styles.KeyStyle.Render("esc") + ": cancel filter")
+			"🔍 " + styles.KeyStyle.Render("ENTER") + ": apply filter • " +
+				styles.KeyStyle.Render("ESC") + ": cancel filter")
 	} else if m.DataPreviewSortMode {
 		helpText = styles.HelpStyle.Render(
-			styles.KeyStyle.Render("↑/↓") + ": select column • " +
-				styles.KeyStyle.Render("enter") + ": toggle sort (off→asc→desc→off) • " +
-				styles.KeyStyle.Render("esc") + ": exit sort mode")
+			"🎯 " + styles.KeyStyle.Render("↑↓") + ": select column • " +
+				styles.KeyStyle.Render("ENTER") + ": cycle sort (off→asc→desc) • " +
+				styles.KeyStyle.Render("ESC") + ": exit sort")
 	} else {
+		// Group help text by function for better readability
+		navigationHelp := styles.KeyStyle.Render("hjkl/↑↓←→") + ": navigate"
+		actionHelp := styles.KeyStyle.Render("ENTER") + ": row details"
+		pageHelp := styles.KeyStyle.Render("←→") + ": pages"
+		featureHelp := styles.KeyStyle.Render("/") + ": filter • " + styles.KeyStyle.Render("s") + ": sort"
+		utilityHelp := styles.KeyStyle.Render("r") + ": reload • " + styles.KeyStyle.Render("ESC") + ": back"
+
 		helpText = styles.HelpStyle.Render(
-			styles.KeyStyle.Render("hjkl") + ": navigate • " +
-				styles.KeyStyle.Render("enter") + ": row details • " +
-				styles.KeyStyle.Render("←/→") + ": prev/next page • " +
-				styles.KeyStyle.Render("/") + ": filter • " +
-				styles.KeyStyle.Render("s") + ": sort columns • " +
-				styles.KeyStyle.Render("r") + ": reload • " +
-				styles.KeyStyle.Render("esc") + ": back")
+			"📍 " + navigationHelp + " • " + actionHelp + " • " + pageHelp + "\n" +
+				"⚡ " + featureHelp + " • " + utilityHelp)
 	}
 
 	content += "\n" + helpText
