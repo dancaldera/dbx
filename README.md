@@ -175,8 +175,8 @@ username:password@tcp(localhost:3306)/database_name
 6. **Export Data**: Export query results or table previews to CSV/JSON format
 
 caldera/dbx/issues/new?template=feature_request.md) |
-| 💬 **Questions** | [GitHub Discussions](https://github.com/danielcaldera/dbx/discussions) |
-| 📚 **Documentation** | [Wiki](https://github.com/danielcaldera/dbx/wiki) |
+| 💬 **Questions** | [GitHub Discussions](https://github.com/dancaldera/dbx/discussions) |
+| 📚 **Documentation** | [Wiki](https://github.com/dancaldera/dbx/wiki) |
 | ✨ **Community** | [Discord Server](https://discord.gg/dbx) |
 
 ---
@@ -218,7 +218,7 @@ caldera/dbx/issues/new?template=feature_request.md) |
 
 ```bash
 # Clone and setup
-git clone https://github.com/danielcaldera/dbx.git
+git clone https://github.com/dancaldera/dbx.git
 cd dbx
 go mod tidy
 
@@ -311,7 +311,7 @@ We welcome contributions! Here's how to get started:
    ```
 
 5. **Submit Pull Request**
-   - Use our [PR template](https://github.com/danielcaldera/dbx/blob/main/.github/pull_request_template.md)
+   - Use our [PR template](https://github.com/dancaldera/dbx/blob/main/.github/pull_request_template.md)
    - Link related issues
    - Add screenshots for UI changes
 
@@ -343,7 +343,7 @@ See [`LICENSE`](LICENSE) file for full details.
 
 ## ⭐ Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=danielcaldera/dbx&type=Date)](https://star-history.com/#danielcaldera/dbx&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=dancaldera/dbx&type=Date)](https://star-history.com/#dancaldera/dbx&Date)
 
 ### 🚀 Built with ❤️ by developers, for developers
 
