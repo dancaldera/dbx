@@ -140,7 +140,7 @@ func GetSchemas(db *sql.DB, driver string) ([]models.SchemaInfo, error) {
 		rows, err := db.Query(query)
 		if err != nil {
 			// If schema query fails, return just the public schema
-			return []models.SchemaInfo{{"public", "Default public schema"}}, nil
+			return []models.SchemaInfo{{Name: "public", Description: "Default public schema"}}, nil
 		}
 		defer rows.Close()
 
