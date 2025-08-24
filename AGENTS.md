@@ -4,12 +4,11 @@
 - `internal/`: application packages
   - `config/` (storage, persistence)
   - `database/` (DB queries and adapters)
-  - `handlers/` (update logic)
   - `models/` (core types and state)
   - `styles/` (theme/styling)
   - `ui/` (Bubble Tea models initialization)
   - `views/` (UI view rendering)
-- Root `main.go`: current main with app logic.
+- Root `main.go`: main entry point with app logic and update handlers.
 - Tests: alongside code as `*_test.go`.
 
 ## Project Overview
@@ -20,7 +19,7 @@
 ## Architecture
 ```
 dbx/
-├── main.go                     # Main application entry point
+├── main.go                     # Main application entry point with update logic
 ├── internal/
 │   ├── config/                 # Configuration and file storage
 │   ├── database/               # Database operations and adapters
@@ -31,6 +30,7 @@ dbx/
 ```
 - Core states: `dbTypeView`, `connectionView`, `schemaView`, `tablesView`, `columnsView`, `queryView`, `queryHistoryView`.
 - Package roles: `config` (persistence), `database` (queries), `models` (types), `styles` (theme), `ui` (init), `views` (rendering).
+- Update logic: implemented in `main.go` via `appModel` wrapper pattern (Go best practice for extending models from other packages).
 - Key deps: `bubbletea`, `bubbles`, `lipgloss`; DB drivers: `lib/pq`, `go-sql-driver/mysql`, `mattn/go-sqlite3`.
 
 ## Build, Test, and Development

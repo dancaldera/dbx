@@ -22,8 +22,7 @@ A terminal-based database explorer built with Go and Bubble Tea. DBX provides an
 
 ```
 dbx/
-├── main.go                     # Legacy main entry point
-├── cmd/dbx/                    # CLI entrypoint (preferred)
+├── main.go                     # Main entry point with update logic
 ├── internal/
 │   ├── config/                 # Configuration and file storage
 │   ├── database/               # Database operations and adapters
@@ -33,7 +32,7 @@ dbx/
 │   └── views/                  # UI view rendering
 ```
 
-DBX follows a clean, modular architecture with well-separated concerns across configuration management, database operations, type definitions, UI styling, and component organization.
+DBX follows a clean, modular architecture with well-separated concerns across configuration management, database operations, type definitions, UI styling, and component organization. The main application logic and Bubble Tea update handlers are implemented in `main.go` using the `appModel` wrapper pattern.
 
 
 ## Installation
@@ -46,7 +45,7 @@ DBX follows a clean, modular architecture with well-separated concerns across co
 git clone <repository-url>
 cd dbx
 go mod tidy
-go build -o dbx ./cmd/dbx
+go build -o dbx main.go
 ```
 
 ## Usage
@@ -58,7 +57,7 @@ Run the application:
 
 Or run directly with Go:
 ```bash
-go run ./cmd/dbx
+go run main.go
 ```
 
 ### Navigation Controls
