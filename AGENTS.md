@@ -56,7 +56,9 @@ dbx/
 - PostgreSQL schemas: auto-detected; prompt when multiple exist; operations scoped to selection.
 
 ## View Support
-- Views and tables are listed with clear labels; supported across PostgreSQL, MySQL, SQLite.
+- Views and tables are listed with clear text labels; supported across PostgreSQL, MySQL, SQLite.
+- Enhanced data preview with intelligent column sizing and smart content truncation.
+- Visual sorting indicators in column headers for improved UX.
 
 ## Coding Style & Naming Conventions
 - Language: Go; follow standard tooling output (`go fmt`).
@@ -71,12 +73,12 @@ dbx/
 - **Purpose**: Central location for reusable helper functions across the application
 - **Organization**: Functions grouped by domain (database, UI, data processing, etc.)
 - **Structure**:
-  - `database.go` - Schema detection, SQL generation, primary key utilities
-  - `data.go` - Data processing, sorting, table/list item creation
-  - `ui.go` - UI component creation, table building, column width calculation
+  - `database.go` - Schema detection, SQL generation, primary key utilities, connection handling
+  - `data.go` - Data processing, sorting, table/list item creation, result handling
+  - `ui.go` - Smart UI component creation, intelligent table building, enhanced column width calculation
   - `math.go` - Mathematical operations (min/max, pagination)
-  - `types.go` - Type inference, datetime detection, value sanitization
-  - `timeout.go` - Async command utilities with timeouts
+  - `types.go` - Content-aware type inference, datetime detection, value sanitization
+  - `timeout.go` - Async command utilities with timeouts, connection testing
 - **Testing**: Each utils file must have corresponding `*_test.go` file
 - **Dependencies**: Utils should not depend on main application state or complex models
 - **Exports**: All utility functions must be exported (capitalized) and documented
@@ -84,9 +86,10 @@ dbx/
 
 ## Navigation Controls
 - Arrows: navigate lists/tables; `Enter`: select; `Esc`: back.
-- `s`: saved connections (menu) / save current (connection view); `n`: new connection.
+- `s`: saved connections (menu) / save current (connection view) / sort mode (data preview).
 - `p`: preview table data; `r`: run SQL; `Ctrl+H`: query history.
-- `i`: indexes/constraints; `f`: foreign keys; `/` or `Ctrl+F`: search.
+- `v`: view columns; `f`: foreign keys; `/`: filter data across all columns.
+- `h`/`l`: scroll columns horizontally in data preview when table is wider than screen.
 - `F1`: test connection; `F2`: validate, save, connect; `Ctrl+E`: export CSV; `Ctrl+J`: export JSON.
 - `q` or `Ctrl+C`: quit.
 

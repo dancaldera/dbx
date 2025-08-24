@@ -38,12 +38,12 @@ DBX follows a clean, modular architecture with well-separated concerns across co
 
 The `utils` package provides centralized helper functions organized by domain:
 
-- **Database utilities**: Schema detection, SQL generation, primary key finding
-- **Data processing**: Sorting parameters, table info creation, list management
-- **UI utilities**: Table creation, column width calculation, list updates
+- **Database utilities**: Schema detection, SQL generation, primary key finding, connection handling
+- **Data processing**: Sorting parameters, table info creation, list management, result handling
+- **UI utilities**: Smart table creation, intelligent column width calculation, enhanced data truncation
 - **Mathematical utilities**: Min/max functions, pagination calculations
-- **Type inference**: Data type detection, datetime parsing, value sanitization
-- **Timeout utilities**: Async command helpers with timeouts
+- **Type inference**: Content-aware data type detection (numeric, date, boolean, text), datetime parsing
+- **Timeout utilities**: Async command helpers with timeouts and connection testing
 
 
 ## Installation
@@ -117,15 +117,15 @@ Columns
 
 Data Preview
 
-- **hjkl**: Navigate cells
-- **←/→**: Previous/next page
+- **hjkl/↑↓←→**: Navigate table and pages
 - **enter**: Row details
-- **/**: Filter
-- **s**: Sort columns
-- **r**: Reload
-- Filter active: **enter** apply, **esc** cancel
-- Sort mode: **↑/↓** select column, **enter** toggle asc/desc, **esc** exit
-- **esc**: Back
+- **/**: Filter data across all columns
+- **s**: Sort mode - select column and cycle sort direction
+- **r**: Reload table data
+- **h/l**: Scroll columns horizontally when table is wider than screen
+- Filter mode: **enter** apply filter, **esc** cancel
+- Sort mode: **↑/↓** select column, **enter** cycle sort (off→asc→desc→off), **esc** exit
+- **esc**: Back to tables
 
 Row Details
 
@@ -182,9 +182,11 @@ username:password@tcp(localhost:3306)/database_name
 - **SQLite**: Uses default `main` schema
 
 ### Views and Tables
-- Views and tables are listed with clear labels (no icons)
+- Views and tables are listed with clear text labels
+- Enhanced data preview with smart column width distribution
+- Improved sorting indicators directly in column headers (↑/↓)
+- Intelligent data truncation for better readability
 - Full column structure browsing for both tables and views
-- Data preview functionality for quick content inspection
 
 ### Indexes and Constraints
 - Complete index information (primary keys, unique indexes, regular indexes)
