@@ -174,92 +174,181 @@ username:password@tcp(localhost:3306)/database_name
 5. **Run Queries**: Execute custom SQL queries with formatted table results
 6. **Export Data**: Export query results or table previews to CSV/JSON format
 
-## Database Features
+caldera/dbx/issues/new?template=feature_request.md) |
+| 💬 **Questions** | [GitHub Discussions](https://github.com/danielcaldera/dbx/discussions) |
+| 📚 **Documentation** | [Wiki](https://github.com/danielcaldera/dbx/wiki) |
+| ✨ **Community** | [Discord Server](https://discord.gg/dbx) |
 
-### Schema Support
+---
+
+## 📦 Database Features
+
+### 🏷️ Schema Support
 - **PostgreSQL**: Full schema support with automatic detection and selection interface
 - **MySQL**: Database-level organization (no schema selection needed)
 - **SQLite**: Uses default `main` schema
 
-### Views and Tables
-- Views and tables are listed with clear text labels
+### 📋 Tables & Views
 - Enhanced data preview with smart column width distribution
 - Improved sorting indicators directly in column headers (↑/↓)
 - Intelligent data truncation for better readability
 - Full column structure browsing for both tables and views
 
-### Indexes and Constraints
+### 🔑 Indexes & Constraints
 - Complete index information (primary keys, unique indexes, regular indexes)
 - Constraint details (foreign keys, primary keys, check constraints)
 - Visual organization with type, affected columns, and full definitions
 
-### Foreign Key Relationships
+### 🔗 Foreign Key Relationships
 - Comprehensive relationship visualization across all tables
-- Shows source/target tables and columns with constraint names
 - Cross-database support for all relationship types
+- Shows source/target tables and columns with constraint names
 
-### Connection Validation
-- Pre-save connection testing with 10-second timeout
-- Database-specific error messages with troubleshooting hints
-- Format validation for connection strings
-
-### Export Capabilities
+### 📤 Export Capabilities
 - **CSV**: Comma-separated values with headers
 - **JSON**: Array of objects format
 - Automatic timestamped filenames
 - Export from query results or table previews
 
-## Dependencies
+---
 
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) - TUI framework
-- [Bubbles](https://github.com/charmbracelet/bubbles) - TUI components
-- [Lipgloss](https://github.com/charmbracelet/lipgloss) - Styling
-- Database drivers for PostgreSQL, MySQL, and SQLite
+## 🛠️ Development
 
-## Development
+### 🚀 Quick Development Setup
 
-### Build
 ```bash
-go build
-```
-
-### Run
-```bash
-go run main.go
-```
-
-### Run Production
-```bash
-chmod +x ./dbx
-./dbx
-```
-
-### Development Commands
-```bash
-# Install dependencies
+# Clone and setup
+git clone https://github.com/danielcaldera/dbx.git
+cd dbx
 go mod tidy
 
-# Format code
-go fmt ./...
+# Run in development mode
+go run main.go
 
-# Static analysis
-go vet ./...
+# Build for production
+go build -o dbx main.go
 
 # Run tests
 go test ./...
 ```
 
-## Contributing
+### 📋 Development Commands
 
-Contributions are welcome! Please review `CONTRIBUTING.md` for guidelines on setting up your environment, coding style, testing, and submitting pull requests.
+| Command | Purpose | Notes |
+|---------|---------|-------|
+| `go mod tidy` | Install dependencies | Run after cloning |
+| `go fmt ./...` | Format code | Required before commit |
+| `go vet ./...` | Static analysis | Catches common errors |
+| `go test ./...` | Run tests | All tests must pass |
+| `go build` | Build binary | Creates `dbx` executable |
+| `go run main.go` | Development run | Hot reload for changes |
 
-## Code Quality Standards
+### 📝 Code Quality Standards
 
 - **File size limit**: All source files must be under 500 lines
 - **Separation of concerns**: Clear module boundaries and responsibilities
 - **Testing**: Tests alongside code as `*_test.go` files
 - **Formatting**: Follow standard Go formatting (`go fmt`)
+- **Documentation**: Public functions must have Go doc comments
 
-## License
+### 🎨 Architecture Patterns
 
-MIT License © 2025 Daniel Caldera. See `LICENSE` for details.
+- **TEA Pattern**: Model-Update-View architecture via Bubble Tea
+- **Dependency Injection**: Components wired through initialization
+- **Package Organization**: Domain-driven internal package structure
+- **Error Handling**: Explicit error handling with user-friendly messages
+
+---
+
+## 📦 Dependencies
+
+DBX is built on these excellent open-source libraries:
+
+### 🎨 UI Framework
+- [🫧 Bubble Tea](https://github.com/charmbracelet/bubbletea) `v1.3.6` - TUI framework
+- [🥐 Bubbles](https://github.com/charmbracelet/bubbles) `v0.21.0` - TUI components
+- [💄 Lipgloss](https://github.com/charmbracelet/lipgloss) `v1.1.0` - Styling and layout
+
+### 🗄️ Database Drivers
+- [🐘 PostgreSQL](https://github.com/lib/pq) `v1.10.9` - Pure Go Postgres driver
+- [🐬 MySQL](https://github.com/go-sql-driver/mysql) `v1.9.3` - MySQL driver
+- [📁 SQLite](https://github.com/mattn/go-sqlite3) `v1.14.28` - SQLite3 driver
+
+### 🚀 Go Requirements
+- **Go Version**: 1.24.5 or later
+- **CGO**: Required for SQLite support
+- **Build Tags**: None required
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Here's how to get started:
+
+### 🚀 Quick Contribution Guide
+
+1. **Fork & Clone**
+   ```bash
+   git clone https://github.com/your-username/dbx.git
+   cd dbx
+   ```
+
+2. **Create Feature Branch**
+   ```bash
+   git checkout -b feature/amazing-feature
+   ```
+
+3. **Make Changes**
+   - Follow our [coding standards](#-code-quality-standards)
+   - Add tests for new functionality
+   - Update documentation as needed
+
+4. **Test & Validate**
+   ```bash
+   go test ./...
+   go fmt ./...
+   go vet ./...
+   ```
+
+5. **Submit Pull Request**
+   - Use our [PR template](https://github.com/danielcaldera/dbx/blob/main/.github/pull_request_template.md)
+   - Link related issues
+   - Add screenshots for UI changes
+
+### 📝 Contribution Areas
+
+| Area | Examples | Difficulty |
+|------|----------|------------|
+| 🐛 **Bug Fixes** | Connection issues, UI glitches | 🟢 Beginner |
+| 🎨 **UI/UX** | New themes, better layouts | 🟡 Intermediate |
+| 🗄️ **Database Support** | New drivers, query features | 🔴 Advanced |
+| 📚 **Documentation** | Guides, examples, translations | 🟢 Beginner |
+| ⚡ **Performance** | Query optimization, caching | 🔴 Advanced |
+
+See our [Contributing Guide](CONTRIBUTING.md) for detailed information.
+
+---
+
+## 📄 License
+
+**MIT License** © 2025 Daniel Caldera
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software.
+
+See [`LICENSE`](LICENSE) file for full details.
+
+---
+
+<div align="center">
+
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=danielcaldera/dbx&type=Date)](https://star-history.com/#danielcaldera/dbx&Date)
+
+### 🚀 Built with ❤️ by developers, for developers
+
+**[Website](https://dbx.dev)** • **[Documentation](https://docs.dbx.dev)** • **[Discord](https://discord.gg/dbx)** • **[Twitter](https://twitter.com/dbx_dev)**
+
+*Made with ☕ and Go in 2025*
+
+</div>

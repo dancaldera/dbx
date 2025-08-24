@@ -56,3 +56,6 @@ Thumbs.db
 
 # Go build/test cache
 .gocache/
+
+# ai permissions files
+.qoder/quests/*
