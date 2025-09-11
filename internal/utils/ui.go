@@ -88,11 +88,7 @@ func CalculateColumnWidths(columns []string, rows [][]string) []int {
 		}
 
 		// Ensure minimum and maximum bounds
-		if colWidths[i] < 6 {
-			colWidths[i] = 6
-		} else if colWidths[i] > 60 {
-			colWidths[i] = 60
-		}
+		colWidths[i] = min(max(colWidths[i], 6), 60)
 	}
 
 	return colWidths
@@ -218,9 +214,7 @@ func CreateDataPreviewTable(m models.Model) models.Model {
 	// Determine available width for table content within the document frame
 	h, v := styles.DocStyle.GetFrameSize()
 	availableWidth := m.Width - h - 4
-	if availableWidth < 20 {
-		availableWidth = 20
-	}
+	availableWidth = max(availableWidth, 20)
 
 	// Calculate column widths
 	colWidths := CalculateColumnWidths(m.DataPreviewAllColumns, m.DataPreviewAllRows)
@@ -243,9 +237,7 @@ func CreateDataPreviewTable(m models.Model) models.Model {
 		endCol = Min(startCol+1, len(colWidths))
 	}
 	visibleCount := endCol - startCol
-	if visibleCount < 0 {
-		visibleCount = 0
-	}
+	visibleCount = max(visibleCount, 0)
 
 	// Create visible columns and rows with sorting indicators
 	cols, rows := CreateVisibleColumnsAndRows(m.DataPreviewAllColumns, m.DataPreviewAllRows, startCol, visibleCount, colWidths, m.DataPreviewSortColumn, m.DataPreviewSortDirection)
@@ -253,9 +245,7 @@ func CreateDataPreviewTable(m models.Model) models.Model {
 	// Compute dynamic height to use remaining vertical space
 	reserved := 10 // Title + info + help, approximate
 	availableHeight := m.Height - v - reserved
-	if availableHeight < 5 {
-		availableHeight = 5
-	}
+	availableHeight = max(availableHeight, 5)
 
 	// Create updated model with new table
 	updatedModel := m

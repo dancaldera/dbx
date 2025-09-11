@@ -672,26 +672,14 @@ func RowDetailView(m models.Model) string {
 		lines := strings.Split(fieldValue, "\n")
 
 		// Calculate dynamic height (use window height minus padding for title and help text)
-		availableHeight := m.Height - 10 // Reserve space for title, help text, and margins
-		if availableHeight < 5 {
-			availableHeight = 5 // Minimum height
-		}
+		availableHeight := max(m.Height-10, 5) // Reserve space for title, help text, and margins
 
 		// Calculate visible range
 		startLine := m.FieldDetailScrollOffset
-		endLine := startLine + availableHeight
-		if endLine > len(lines) {
-			endLine = len(lines)
-		}
+		endLine := min(startLine+availableHeight, len(lines))
 
 		// Calculate dynamic width (use window width minus padding)
-		availableWidth := m.Width - 10 // Reserve space for margins
-		if availableWidth < 40 {
-			availableWidth = 40 // Minimum width
-		}
-		if availableWidth > 200 {
-			availableWidth = 200 // Maximum width for readability
-		}
+		availableWidth := min(max(m.Width-10, 40), 200) // Reserve space for margins
 
 		// Build visible content with horizontal scrolling
 		var visibleLines []string
@@ -699,10 +687,7 @@ func RowDetailView(m models.Model) string {
 			line := lines[i]
 			// Apply horizontal scrolling
 			if m.FieldDetailHorizontalOffset < len(line) {
-				endChar := m.FieldDetailHorizontalOffset + availableWidth
-				if endChar > len(line) {
-					endChar = len(line)
-				}
+				endChar := min(m.FieldDetailHorizontalOffset+availableWidth, len(line))
 				line = line[m.FieldDetailHorizontalOffset:endChar]
 			} else {
 				line = ""
@@ -718,10 +703,7 @@ func RowDetailView(m models.Model) string {
 
 		// Show line information
 		startDisplayLine := m.FieldDetailScrollOffset + 1
-		endDisplayLine := m.FieldDetailScrollOffset + len(visibleLines)
-		if endDisplayLine > len(lines) {
-			endDisplayLine = len(lines)
-		}
+		endDisplayLine := min(m.FieldDetailScrollOffset+len(visibleLines), len(lines))
 
 		if len(lines) > 1 {
 			scrollInfo = fmt.Sprintf(" • Lines %d-%d of %d", startDisplayLine, endDisplayLine, len(lines))

@@ -215,9 +215,7 @@ func GetTableInfos(db *sql.DB, driver, schema string) ([]models.TableInfo, error
 
 			if info.TableType == "BASE TABLE" && estimatedRows.Valid && estimatedRows.Int64 > 0 {
 				info.RowCount = estimatedRows.Int64
-				if info.RowCount < 0 {
-					info.RowCount = 0
-				}
+				info.RowCount = max(info.RowCount, 0)
 				if info.Schema != "" && info.Schema != "public" {
 					info.Description = fmt.Sprintf("%s %s.%s • ~%d rows", emoji, info.Schema, objectType, info.RowCount)
 				} else {
@@ -471,9 +469,7 @@ func GetTablePreviewPaginatedWithSort(db *sql.DB, driver, tableName, schema stri
 	if limit <= 0 {
 		limit = 10
 	}
-	if offset < 0 {
-		offset = 0
-	}
+	offset = max(offset, 0)
 
 	var query string
 	var orderBy string
@@ -603,9 +599,7 @@ func GetTablePreviewPaginatedWithFilterAndSort(db *sql.DB, driver, tableName, sc
 	if limit <= 0 {
 		limit = 25
 	}
-	if offset < 0 {
-		offset = 0
-	}
+	offset = max(offset, 0)
 
 	var orderBy string
 	if sortColumn != "" && sortDirection != "" {

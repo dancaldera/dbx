@@ -248,14 +248,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.SearchInput.Width = msg.Width - h - 4
 
 		// Update textarea size for field editing
-		textareaWidth := msg.Width - h - 4
-		textareaHeight := msg.Height - v - 8 // Reserve space for title and help text only
-		if textareaWidth < 40 {
-			textareaWidth = 40
-		}
-		if textareaHeight < 5 {
-			textareaHeight = 5
-		}
+		textareaWidth := max(msg.Width-h-4, 40)
+		textareaHeight := max(msg.Height-v-8, 5) // Reserve space for title and help text only
 		m.FieldTextarea.SetWidth(textareaWidth)
 		m.FieldTextarea.SetHeight(textareaHeight)
 
@@ -748,15 +742,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 						// Set responsive textarea size
 						h, v := styles.DocStyle.GetFrameSize()
-						textareaWidth := m.Width - h - 4
+						textareaWidth := max(m.Width-h-4, 40)
 						// Use more space now that we only render the textarea in edit view
-						textareaHeight := m.Height - v - 8 // Reserve space for title and help text only
-						if textareaWidth < 40 {
-							textareaWidth = 40
-						}
-						if textareaHeight < 5 {
-							textareaHeight = 5
-						}
+						textareaHeight := max(m.Height-v-8, 5) // Reserve space for title and help text only
 						m.FieldTextarea.SetWidth(textareaWidth)
 						m.FieldTextarea.SetHeight(textareaHeight)
 
@@ -816,13 +804,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Calculate max scroll based on field content and dynamic height
 					lines := len(strings.Split(fieldValue, "\n"))
 					availableHeight := m.Height - 10 // Same calculation as in view
-					if availableHeight < 5 {
-						availableHeight = 5
-					}
+					availableHeight = max(availableHeight, 5)
 					maxScroll := lines - availableHeight
-					if maxScroll < 0 {
-						maxScroll = 0
-					}
+					maxScroll = max(maxScroll, 0)
 					if m.FieldDetailScrollOffset < maxScroll {
 						m.FieldDetailScrollOffset++
 					}
@@ -831,38 +815,17 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "left", "h":
 				if m.IsViewingFieldDetail {
 					// Calculate scroll increment based on available width
-					availableWidth := m.Width - 10
-					if availableWidth < 40 {
-						availableWidth = 40
-					}
-					if availableWidth > 200 {
-						availableWidth = 200
-					}
-					scrollIncrement := availableWidth / 4 // Scroll by 1/4 of screen width
-					if scrollIncrement < 5 {
-						scrollIncrement = 5 // Minimum scroll
-					}
+					availableWidth := min(max(m.Width-10, 40), 200)
+					scrollIncrement := max(availableWidth/4, 5) // Scroll by 1/4 of screen width, minimum 5
 
-					m.FieldDetailHorizontalOffset -= scrollIncrement
-					if m.FieldDetailHorizontalOffset < 0 {
-						m.FieldDetailHorizontalOffset = 0
-					}
+					m.FieldDetailHorizontalOffset = max(m.FieldDetailHorizontalOffset-scrollIncrement, 0)
 					return m, nil
 				}
 			case "right", "l":
 				if m.IsViewingFieldDetail {
 					// Calculate scroll increment based on available width
-					availableWidth := m.Width - 10
-					if availableWidth < 40 {
-						availableWidth = 40
-					}
-					if availableWidth > 200 {
-						availableWidth = 200
-					}
-					scrollIncrement := availableWidth / 4 // Scroll by 1/4 of screen width
-					if scrollIncrement < 5 {
-						scrollIncrement = 5 // Minimum scroll
-					}
+					availableWidth := min(max(m.Width-10, 40), 200)
+					scrollIncrement := max(availableWidth/4, 5) // Scroll by 1/4 of screen width, minimum 5
 
 					m.FieldDetailHorizontalOffset += scrollIncrement
 					return m, nil
@@ -957,9 +920,7 @@ func (d fieldItemDelegate) Render(w io.Writer, m list.Model, index int, it list.
 
 	// Budget for value so type is always shown (use display widths)
 	budget := width - lipgloss.Width(prefix) - lipgloss.Width(namePart) - spaceBeforeBadge - lipgloss.Width(badge)
-	if budget < 0 {
-		budget = 0
-	}
+	budget = max(budget, 0)
 	val := utils.TruncateWithEllipsis(single, budget, "...")
 
 	line := prefix + namePart + val + strings.Repeat(" ", spaceBeforeBadge) + badge
