@@ -9,6 +9,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/dancaldera/dbx/internal/database"
 	"github.com/dancaldera/dbx/internal/models"
 )
@@ -40,6 +42,18 @@ func BuildUpdateSQL(driver, schema, table, field, primaryKey string) string {
 	default:
 		return fmt.Sprintf(`UPDATE "%s"."%s" SET "%s" = $1 WHERE "%s" = $2`,
 			schema, table, field, primaryKey)
+	}
+}
+
+// DetermineSortParameters converts sort direction and column to database parameters
+func DetermineSortParameters(sortDirection models.SortDirection, sortColumn string) (string, string) {
+	switch sortDirection {
+	case models.SortAsc:
+		return sortColumn, "ASC"
+	case models.SortDesc:
+		return sortColumn, "DESC"
+	default:
+		return "", ""
 	}
 }
 
@@ -270,4 +284,150 @@ func HandleConnectResult(m models.Model, msg models.ConnectResult) models.Model 
 
 	updatedModel.State = models.TablesView
 	return updatedModel
+}
+
+// CreateTableInfos creates TableInfo objects from table names
+func CreateTableInfos(tables []string, schema string) []models.TableInfo {
+	infos := make([]models.TableInfo, len(tables))
+	for i, table := range tables {
+		infos[i] = models.TableInfo{
+			Name:   table,
+			Schema: schema,
+		}
+	}
+	return infos
+}
+
+// CreateTableListItems creates list items from table infos
+func CreateTableListItems(infos []models.TableInfo) []list.Item {
+	items := make([]list.Item, len(infos))
+	for i, info := range infos {
+		items[i] = models.Item{
+			ItemTitle: info.Name,
+			ItemDesc:  fmt.Sprintf("Table in %s schema", info.Schema),
+		}
+	}
+	return items
+}
+
+// HandleTestConnectionResult processes test connection result and updates model
+func HandleTestConnectionResult(m models.Model, msg models.TestConnectionResult) (models.Model, tea.Cmd) {
+	updatedModel := m
+	updatedModel.IsTestingConnection = false
+
+	if msg.Err != nil {
+		updatedModel.Err = msg.Err
+		return updatedModel, nil
+	}
+
+	updatedModel.QueryResult = "Connection successful!"
+	return updatedModel, ClearResultAfterTimeout()
+}
+
+// HandleColumnsResult processes columns result and updates model
+func HandleColumnsResult(m models.Model, msg models.ColumnsResult) models.Model {
+	updatedModel := m
+	updatedModel.IsLoadingColumns = false
+
+	if msg.Err != nil {
+		updatedModel.Err = msg.Err
+		return updatedModel
+	}
+
+	// Convert columns to table rows (msg.Columns is [][]string)
+	rows := make([]table.Row, len(msg.Columns))
+	for i, col := range msg.Columns {
+		if len(col) >= 4 {
+			rows[i] = table.Row{col[0], col[1], col[2], col[3]}
+		} else if len(col) >= 3 {
+			rows[i] = table.Row{col[0], col[1], col[2], ""}
+		} else if len(col) >= 2 {
+			rows[i] = table.Row{col[0], col[1], "", ""}
+		} else if len(col) >= 1 {
+			rows[i] = table.Row{col[0], "", "", ""}
+		} else {
+			rows[i] = table.Row{"", "", "", ""}
+		}
+	}
+
+	// Update columns table
+	updatedModel.ColumnsTable.SetRows(rows)
+	updatedModel.State = models.ColumnsView
+	return updatedModel
+}
+
+// HandleDataPreviewResult processes data preview result and updates model
+func HandleDataPreviewResult(m models.Model, msg models.DataPreviewResult) models.Model {
+	updatedModel := m
+	updatedModel.IsLoadingPreview = false
+
+	if msg.Err != nil {
+		updatedModel.Err = msg.Err
+		return updatedModel
+	}
+
+	updatedModel.DataPreviewAllColumns = msg.Columns
+	updatedModel.DataPreviewAllRows = msg.Rows
+	updatedModel.DataPreviewTotalRows = msg.TotalRows
+
+	// Create the data preview table
+	updatedModel = CreateDataPreviewTable(updatedModel)
+	
+	// Switch to data preview view to show the table
+	updatedModel.State = models.DataPreviewView
+	return updatedModel
+}
+
+// HandleRelationshipsResult processes relationships result and updates model
+func HandleRelationshipsResult(m models.Model, msg models.RelationshipsResult) models.Model {
+	updatedModel := m
+
+	if msg.Err != nil {
+		updatedModel.Err = msg.Err
+		return updatedModel
+	}
+
+	// Convert relationships to table rows
+	rows := make([]table.Row, len(msg.Relationships))
+	for i, rel := range msg.Relationships {
+		if len(rel) >= 4 {
+			rows[i] = table.Row{rel[0], rel[1], rel[2], rel[3]}
+		} else if len(rel) >= 3 {
+			rows[i] = table.Row{rel[0], rel[1], rel[2], ""}
+		} else if len(rel) >= 2 {
+			rows[i] = table.Row{rel[0], rel[1], "", ""}
+		} else if len(rel) >= 1 {
+			rows[i] = table.Row{rel[0], "", "", ""}
+		} else {
+			rows[i] = table.Row{"", "", "", ""}
+		}
+	}
+
+	// Update relationships table
+	updatedModel.RelationshipsTable.SetRows(rows)
+	updatedModel.State = models.RelationshipsView
+	return updatedModel
+}
+
+// HandleFieldUpdateResult processes field update result and updates model
+func HandleFieldUpdateResult(m models.Model, msg models.FieldUpdateResult) (models.Model, tea.Cmd) {
+	updatedModel := m
+
+	if msg.Err != nil {
+		updatedModel.Err = msg.Err
+		return updatedModel, nil
+	}
+
+	if msg.Success {
+		updatedModel.OriginalFieldValue = msg.NewValue
+		if msg.ExitEdit {
+			updatedModel.IsEditingField = false
+			updatedModel.FieldTextarea.Blur()
+			updatedModel.EditingFieldName = ""
+			// Refresh data preview to show updated value
+			return updatedModel, LoadDataPreview(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn)
+		}
+	}
+
+	return updatedModel, nil
 }

@@ -430,6 +430,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.ConnectionStr = conn.ConnectionStr
 							m.IsConnecting = true
 							m.Err = nil
+							m.QueryResult = "" // Clear any previous messages
 							return m, utils.ConnectToDB(m.SelectedDB, m.ConnectionStr)
 						}
 					}

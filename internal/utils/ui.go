@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/dancaldera/dbx/internal/models"
 	"github.com/dancaldera/dbx/internal/styles"
@@ -273,4 +275,39 @@ func UpdateSavedConnectionsList(m models.Model) models.Model {
 	updatedModel := m
 	updatedModel.SavedConnectionsList.SetItems(savedItems)
 	return updatedModel
+}
+
+// UpdateRowDetailList creates field items for row detail view
+func UpdateRowDetailList(columns []string, rowData []string) []list.Item {
+	items := make([]list.Item, len(columns))
+	for i, col := range columns {
+		if i < len(rowData) {
+			items[i] = models.FieldItem{
+				Name:  col,
+				Value: rowData[i],
+			}
+		} else {
+			items[i] = models.FieldItem{
+				Name:  col,
+				Value: "",
+			}
+		}
+	}
+	return items
+}
+
+// UpdateSavedConnectionsItems creates list items from saved connections
+func UpdateSavedConnectionsItems(connections []models.SavedConnection) []list.Item {
+	items := make([]list.Item, len(connections))
+	for i, conn := range connections {
+		connStr := conn.ConnectionStr
+		if len(connStr) > 50 {
+			connStr = connStr[:50] + "..."
+		}
+		items[i] = models.Item{
+			ItemTitle: conn.Name,
+			ItemDesc:  fmt.Sprintf("%s - %s", conn.Driver, connStr),
+		}
+	}
+	return items
 }

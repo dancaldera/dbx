@@ -1,209 +1,83 @@
 package utils
 
 import (
-	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/table"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dancaldera/dbx/internal/models"
-	"github.com/dancaldera/dbx/internal/styles"
+	"github.com/charmbracelet/x/ansi"
 )
 
-// DetermineSortParameters converts internal sort parameters to SQL format
-func DetermineSortParameters(sortDirection models.SortDirection, sortColumn string) (string, string) {
-	if sortDirection == models.SortOff || sortColumn == "" {
-		return "", ""
+// InferFieldType detects the data type of a field value
+func InferFieldType(v string) string {
+	if v == "NULL" {
+		return "NULL"
 	}
-
-	switch sortDirection {
-	case models.SortAsc:
-		return sortColumn, "ASC"
-	case models.SortDesc:
-		return sortColumn, "DESC"
-	default:
-		return "", ""
+	if v == "" {
+		return "Text"
 	}
+	// Boolean
+	if v == "true" || v == "false" || v == "TRUE" || v == "FALSE" {
+		return "Bool"
+	}
+	// Numeric
+	if _, err := strconv.ParseInt(v, 10, 64); err == nil {
+		return "Int"
+	}
+	if _, err := strconv.ParseFloat(v, 64); err == nil {
+		return "Float"
+	}
+	// JSON
+	s := strings.TrimSpace(v)
+	if (strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}")) || (strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]")) {
+		return "JSON"
+	}
+	// DateTime: try to parse with common layouts instead of loose punctuation checks
+	if LooksLikeDateTime(strings.TrimSpace(v)) {
+		return "DateTime"
+	}
+	return "Text"
 }
 
-// CreateTableInfos generates TableInfo objects from table names
-func CreateTableInfos(tables []string, schema string) []models.TableInfo {
-	tableInfos := make([]models.TableInfo, len(tables))
-	for i, tableName := range tables {
-		tableInfos[i] = models.TableInfo{
-			Name:        tableName,
-			Schema:      schema,
-			TableType:   "BASE TABLE",
-			Description: "Table",
+// LooksLikeDateTime attempts to detect datetime format
+func LooksLikeDateTime(s string) bool {
+	if s == "" {
+		return false
+	}
+	// Avoid obviously long textual content
+	if len(s) > 64 {
+		return false
+	}
+	layouts := []string{
+		time.RFC3339,
+		time.RFC3339Nano,
+		time.RFC1123,
+		time.RFC1123Z,
+		time.RFC822,
+		time.RFC822Z,
+		time.RFC850,
+		time.RubyDate,
+		"2006-01-02 15:04:05 -0700 MST",
+		"2006-01-02 15:04:05 MST",
+		"2006-01-02 15:04:05.000 -0700 MST",
+		"2006-01-02 15:04:05.000",
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if _, err := time.Parse(layout, s); err == nil {
+			return true
 		}
 	}
-	return tableInfos
+	return false
 }
 
-// UpdateRowDetailList creates list items for row detail view
-func UpdateRowDetailList(columns []string, rowData []string) []list.Item {
-	items := make([]list.Item, len(columns))
-	for i, col := range columns {
-		var value string
-		if i < len(rowData) {
-			value = rowData[i]
-		} else {
-			value = "NULL"
-		}
-		items[i] = models.FieldItem{Name: col, Value: value}
-	}
-	return items
+// SanitizeValueForDisplay cleans values for single-line UI display
+func SanitizeValueForDisplay(value string) string {
+	return strings.Join(strings.Fields(value), " ")
 }
 
-// UpdateSavedConnectionsItems creates list items for saved connections
-func UpdateSavedConnectionsItems(savedConnections []models.SavedConnection) []list.Item {
-	savedItems := make([]list.Item, len(savedConnections))
-	for i, conn := range savedConnections {
-		connStr := conn.ConnectionStr
-		if len(connStr) > 50 {
-			connStr = connStr[:50] + "..."
-		}
-		savedItems[i] = models.Item{
-			ItemTitle: conn.Name,
-			ItemDesc:  fmt.Sprintf("%s - %s", conn.Driver, connStr),
-		}
-	}
-	return savedItems
-}
-
-// CreateTableListItems generates list items from table infos for display
-func CreateTableListItems(tableInfos []models.TableInfo) []list.Item {
-	items := make([]list.Item, len(tableInfos))
-	for i, info := range tableInfos {
-		items[i] = models.Item{
-			ItemTitle: info.Name,
-			// omit description to avoid redundant "Table" line per item
-		}
-	}
-	return items
-}
-
-// HandleTestConnectionResult processes test connection result
-func HandleTestConnectionResult(m models.Model, msg models.TestConnectionResult) (models.Model, tea.Cmd) {
-	updatedModel := m
-	updatedModel.IsTestingConnection = false
-	if msg.Success {
-		updatedModel.QueryResult = "✅ Connection successful!"
-	} else {
-		updatedModel.Err = fmt.Errorf("connection failed: %v", msg.Err)
-	}
-
-	return updatedModel, tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
-		return models.ClearResultMsg{}
-	})
-}
-
-// HandleColumnsResult processes columns result and updates model
-func HandleColumnsResult(m models.Model, msg models.ColumnsResult) models.Model {
-	updatedModel := m
-	updatedModel.IsLoadingColumns = false
-
-	if msg.Err != nil {
-		updatedModel.Err = msg.Err
-		return updatedModel
-	}
-
-	// Convert to table rows
-	rows := make([]table.Row, len(msg.Columns))
-	for i, col := range msg.Columns {
-		rows[i] = table.Row{col[0], col[1], col[2], col[3]}
-	}
-
-	updatedModel.ColumnsTable.SetRows(rows)
-	updatedModel.State = models.ColumnsView
-
-	return updatedModel
-}
-
-// HandleDataPreviewResult processes data preview result
-func HandleDataPreviewResult(m models.Model, msg models.DataPreviewResult) models.Model {
-	updatedModel := m
-	updatedModel.IsLoadingPreview = false
-	if msg.Err != nil {
-		updatedModel.Err = msg.Err
-		return updatedModel
-	}
-
-	// Update total rows count
-	if msg.TotalRows > 0 {
-		updatedModel.DataPreviewTotalRows = msg.TotalRows
-	}
-
-	// Store all columns and rows for horizontal scrolling
-	updatedModel.DataPreviewAllColumns = msg.Columns
-	updatedModel.DataPreviewAllRows = msg.Rows
-	updatedModel.DataPreviewScrollOffset = 0 // Reset scroll position
-
-	// Create the initial table view
-	updatedModel = CreateDataPreviewTable(updatedModel)
-	updatedModel.State = models.DataPreviewView
-	return updatedModel
-}
-
-// HandleRelationshipsResult processes relationships result
-func HandleRelationshipsResult(m models.Model, msg models.RelationshipsResult) models.Model {
-	updatedModel := m
-	if msg.Err != nil {
-		updatedModel.Err = msg.Err
-		return updatedModel
-	}
-	// columns: From Table, From Column, To Table, To Column, Constraint Name
-	cols := []table.Column{
-		{Title: "From Table", Width: 20},
-		{Title: "From Column", Width: 20},
-		{Title: "To Table", Width: 20},
-		{Title: "To Column", Width: 20},
-		{Title: "Constraint Name", Width: 25},
-	}
-	rows := make([]table.Row, len(msg.Relationships))
-	for i, rel := range msg.Relationships {
-		rows[i] = table.Row(rel)
-	}
-	updatedModel.RelationshipsTable = table.New(
-		table.WithColumns(cols),
-		table.WithRows(rows),
-		table.WithFocused(true),
-		table.WithHeight(10),
-	)
-	updatedModel.RelationshipsTable.SetStyles(styles.GetBlueTableStyles())
-	updatedModel.State = models.RelationshipsView
-	return updatedModel
-}
-
-// HandleFieldUpdateResult processes field update result
-func HandleFieldUpdateResult(m models.Model, msg models.FieldUpdateResult) (models.Model, tea.Cmd) {
-	updatedModel := m
-	if msg.ExitEdit {
-		updatedModel.IsEditingField = false
-		updatedModel.FieldTextarea.Blur()
-	}
-
-	if msg.Success {
-		// Update the row data with the new value
-		if updatedModel.EditingFieldIndex >= 0 && updatedModel.EditingFieldIndex < len(updatedModel.SelectedRowData) {
-			updatedModel.SelectedRowData[updatedModel.EditingFieldIndex] = msg.NewValue
-		}
-
-		// Update the row detail list with the new value
-		items := UpdateRowDetailList(updatedModel.DataPreviewAllColumns, updatedModel.SelectedRowData)
-		updatedModel.RowDetailList.SetItems(items)
-
-		updatedModel.QueryResult = "✅ Field updated successfully!"
-		updatedModel.Err = nil
-
-		// Clear the editing state
-		updatedModel.EditingFieldName = ""
-		updatedModel.OriginalFieldValue = ""
-
-		return updatedModel, ClearResultAfterTimeout()
-	} else {
-		updatedModel.Err = msg.Err
-		return updatedModel, nil
-	}
+// TruncateWithEllipsis truncates a string to fit within budget with ellipsis
+func TruncateWithEllipsis(value string, budget int, ellipsis string) string {
+	return ansi.Truncate(value, budget, ellipsis)
 }

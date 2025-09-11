@@ -25,17 +25,48 @@ func DBTypeView(m models.Model) string {
 
 // SavedConnectionsView renders the saved connections screen
 func SavedConnectionsView(m models.Model) string {
-	var content string
-
+	// Create the main content area
+	listContent := m.SavedConnectionsList.View()
+	
+	// Build layout with elements
+	var elements []string
+	
+	// Add title
+	title := styles.TitleStyle.Render("📋 Saved Connections")
+	elements = append(elements, title)
+	
+	// Add status message if present (compact, single line)
 	if m.IsConnecting {
-		loadingMsg := "⏳ Connecting to saved connection..."
-		content = m.SavedConnectionsList.View() + "\n" + loadingMsg
-	} else if len(m.SavedConnections) == 0 {
-		emptyMsg := styles.InfoStyle.Render("📝 No saved connections yet.\n\nGo back and create your first connection!")
-		content = m.SavedConnectionsList.View() + "\n" + emptyMsg
-	} else {
-		content = m.SavedConnectionsList.View()
+		// Show which connection we're trying to connect to
+		if selectedItem, ok := m.SavedConnectionsList.SelectedItem().(models.Item); ok {
+			statusMsg := fmt.Sprintf("⏳ Connecting to %s...", selectedItem.ItemTitle)
+			elements = append(elements, statusMsg)
+		} else {
+			statusMsg := "⏳ Connecting..."
+			elements = append(elements, statusMsg)
+		}
+	} else if m.Err != nil {
+		// Show error message prominently - use plain text for visibility
+		errorText := m.Err.Error()
+		errorMsg := "!!! CONNECTION ERROR: " + errorText + " !!!"
+		elements = append(elements, errorMsg)
+		// For debugging: also print to console 
+		fmt.Printf("[DEBUG] Error being displayed: %s\n errorMsg: %s\n", errorText, errorMsg)
 	}
+	
+	// Add spacing before the list
+	elements = append(elements, "")
+	
+	// Add the list
+	elements = append(elements, listContent)
+	
+	// Add empty state message if needed (but don't show list)
+	if len(m.SavedConnections) == 0 && !m.IsConnecting && m.Err == nil {
+		elements = []string{title, "", styles.InfoStyle.Render("📝 No saved connections yet.\n\nGo back and create your first connection!")}
+	}
+
+	// Join all elements
+	content := lipgloss.JoinVertical(lipgloss.Left, elements...)
 
 	helpText := styles.HelpStyle.Render(
 		styles.KeyStyle.Render("enter") + ": connect • " +
