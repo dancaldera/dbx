@@ -259,13 +259,14 @@ func SaveFieldEdit(db *sql.DB, selectedDB models.DBType, selectedSchema, selecte
 }
 
 // HandleConnectResult processes database connection result and updates model
-func HandleConnectResult(m models.Model, msg models.ConnectResult) models.Model {
+func HandleConnectResult(m models.Model, msg models.ConnectResult) (models.Model, tea.Cmd) {
 	updatedModel := m
 	updatedModel.IsConnecting = false
 
 	if msg.Err != nil {
-		updatedModel.Err = msg.Err
-		return updatedModel
+		// Ensure we stay in SavedConnectionsView to display the error
+		updatedModel.State = models.SavedConnectionsView
+		return SetErrorWithTimeout(updatedModel, msg.Err, 3*time.Second)
 	}
 
 	updatedModel.DB = msg.DB
@@ -283,7 +284,7 @@ func HandleConnectResult(m models.Model, msg models.ConnectResult) models.Model 
 	updatedModel.TablesList.SetItems(items)
 
 	updatedModel.State = models.TablesView
-	return updatedModel
+	return updatedModel, nil
 }
 
 // CreateTableInfos creates TableInfo objects from table names
@@ -316,8 +317,7 @@ func HandleTestConnectionResult(m models.Model, msg models.TestConnectionResult)
 	updatedModel.IsTestingConnection = false
 
 	if msg.Err != nil {
-		updatedModel.Err = msg.Err
-		return updatedModel, nil
+		return SetErrorWithTimeout(updatedModel, msg.Err, 3*time.Second)
 	}
 
 	updatedModel.QueryResult = "Connection successful!"
@@ -325,13 +325,12 @@ func HandleTestConnectionResult(m models.Model, msg models.TestConnectionResult)
 }
 
 // HandleColumnsResult processes columns result and updates model
-func HandleColumnsResult(m models.Model, msg models.ColumnsResult) models.Model {
+func HandleColumnsResult(m models.Model, msg models.ColumnsResult) (models.Model, tea.Cmd) {
 	updatedModel := m
 	updatedModel.IsLoadingColumns = false
 
 	if msg.Err != nil {
-		updatedModel.Err = msg.Err
-		return updatedModel
+		return SetErrorWithTimeout(updatedModel, msg.Err, 3*time.Second)
 	}
 
 	// Convert columns to table rows (msg.Columns is [][]string)
@@ -353,17 +352,16 @@ func HandleColumnsResult(m models.Model, msg models.ColumnsResult) models.Model 
 	// Update columns table
 	updatedModel.ColumnsTable.SetRows(rows)
 	updatedModel.State = models.ColumnsView
-	return updatedModel
+	return updatedModel, nil
 }
 
 // HandleDataPreviewResult processes data preview result and updates model
-func HandleDataPreviewResult(m models.Model, msg models.DataPreviewResult) models.Model {
+func HandleDataPreviewResult(m models.Model, msg models.DataPreviewResult) (models.Model, tea.Cmd) {
 	updatedModel := m
 	updatedModel.IsLoadingPreview = false
 
 	if msg.Err != nil {
-		updatedModel.Err = msg.Err
-		return updatedModel
+		return SetErrorWithTimeout(updatedModel, msg.Err, 3*time.Second)
 	}
 
 	updatedModel.DataPreviewAllColumns = msg.Columns
@@ -375,16 +373,15 @@ func HandleDataPreviewResult(m models.Model, msg models.DataPreviewResult) model
 	
 	// Switch to data preview view to show the table
 	updatedModel.State = models.DataPreviewView
-	return updatedModel
+	return updatedModel, nil
 }
 
 // HandleRelationshipsResult processes relationships result and updates model
-func HandleRelationshipsResult(m models.Model, msg models.RelationshipsResult) models.Model {
+func HandleRelationshipsResult(m models.Model, msg models.RelationshipsResult) (models.Model, tea.Cmd) {
 	updatedModel := m
 
 	if msg.Err != nil {
-		updatedModel.Err = msg.Err
-		return updatedModel
+		return SetErrorWithTimeout(updatedModel, msg.Err, 3*time.Second)
 	}
 
 	// Convert relationships to table rows
@@ -406,7 +403,7 @@ func HandleRelationshipsResult(m models.Model, msg models.RelationshipsResult) m
 	// Update relationships table
 	updatedModel.RelationshipsTable.SetRows(rows)
 	updatedModel.State = models.RelationshipsView
-	return updatedModel
+	return updatedModel, nil
 }
 
 // HandleFieldUpdateResult processes field update result and updates model
@@ -414,8 +411,7 @@ func HandleFieldUpdateResult(m models.Model, msg models.FieldUpdateResult) (mode
 	updatedModel := m
 
 	if msg.Err != nil {
-		updatedModel.Err = msg.Err
-		return updatedModel, nil
+		return SetErrorWithTimeout(updatedModel, msg.Err, 3*time.Second)
 	}
 
 	if msg.Success {

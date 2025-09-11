@@ -197,25 +197,25 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle basic message types
 	switch msg := msg.(type) {
 	case models.ConnectResult:
-		updatedModel := utils.HandleConnectResult(m.Model, msg)
+		updatedModel, cmd := utils.HandleConnectResult(m.Model, msg)
 		m.Model = updatedModel
-		return m, nil
+		return m, cmd
 	case models.TestConnectionResult:
 		updatedModel, cmd := utils.HandleTestConnectionResult(m.Model, msg)
 		m.Model = updatedModel
 		return m, cmd
 	case models.ColumnsResult:
-		updatedModel := utils.HandleColumnsResult(m.Model, msg)
+		updatedModel, cmd := utils.HandleColumnsResult(m.Model, msg)
 		m.Model = updatedModel
-		return m, nil
+		return m, cmd
 	case models.DataPreviewResult:
-		updatedModel := utils.HandleDataPreviewResult(m.Model, msg)
+		updatedModel, cmd := utils.HandleDataPreviewResult(m.Model, msg)
 		m.Model = updatedModel
-		return m, nil
+		return m, cmd
 	case models.RelationshipsResult:
-		updatedModel := utils.HandleRelationshipsResult(m.Model, msg)
+		updatedModel, cmd := utils.HandleRelationshipsResult(m.Model, msg)
 		m.Model = updatedModel
-		return m, nil
+		return m, cmd
 	case models.FieldUpdateResult:
 		updatedModel, cmd := utils.HandleFieldUpdateResult(m.Model, msg)
 		m.Model = updatedModel
@@ -225,6 +225,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case models.ClearErrorMsg:
 		m.Err = nil
+		m.ErrorTimeout = nil
+		return m, nil
+	case models.ErrorTimeoutMsg:
+		updatedModel := utils.ClearErrorTimeout(m.Model)
+		m.Model = updatedModel
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
@@ -482,6 +487,28 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "f":
 			if m.State == models.TablesView && m.DB != nil {
 				return m, utils.LoadRelationships(m.DB, m.SelectedDB, m.SelectedSchema)
+			}
+		case "d":
+			if m.State == models.SavedConnectionsView && !m.IsConnecting {
+				// Delete the currently selected saved connection
+				if selectedItem, ok := m.SavedConnectionsList.SelectedItem().(models.Item); ok {
+					connectionName := selectedItem.ItemTitle
+					// Find and remove the connection
+					for i, conn := range m.SavedConnections {
+						if conn.Name == connectionName {
+							// Remove connection from slice
+							m.SavedConnections = append(m.SavedConnections[:i], m.SavedConnections[i+1:]...)
+							// Save updated connections
+							config.SaveConnections(m.SavedConnections)
+							// Update the list
+							m.Model = utils.UpdateSavedConnectionsList(m.Model)
+							// Show success message
+							m.QueryResult = fmt.Sprintf("✅ Deleted connection '%s'", connectionName)
+							break
+						}
+					}
+				}
+				return m, utils.ClearResultAfterTimeout()
 			}
 		}
 	}

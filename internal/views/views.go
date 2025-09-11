@@ -31,28 +31,40 @@ func SavedConnectionsView(m models.Model) string {
 	// Build layout with elements
 	var elements []string
 	
-	// Add title
-	title := styles.TitleStyle.Render("📋 Saved Connections")
-	elements = append(elements, title)
+	// Build title with inline status/error
+	var titleLine string
+	baseTitle := "📋 Saved Connections"
 	
-	// Add status message if present (compact, single line)
 	if m.IsConnecting {
-		// Show which connection we're trying to connect to
+		// Show loading status inline with title using horizontal join
+		titlePart := styles.TitleStyle.Render(baseTitle)
 		if selectedItem, ok := m.SavedConnectionsList.SelectedItem().(models.Item); ok {
-			statusMsg := fmt.Sprintf("⏳ Connecting to %s...", selectedItem.ItemTitle)
-			elements = append(elements, statusMsg)
+			loadingText := fmt.Sprintf("⏳ Connecting to %s...", selectedItem.ItemTitle)
+			loadingPart := styles.LoadingStyle.Render(loadingText)
+			titleLine = lipgloss.JoinHorizontal(lipgloss.Left, titlePart, "  ", loadingPart)
 		} else {
-			statusMsg := "⏳ Connecting..."
-			elements = append(elements, statusMsg)
+			loadingText := "⏳ Connecting..."
+			loadingPart := styles.LoadingStyle.Render(loadingText)
+			titleLine = lipgloss.JoinHorizontal(lipgloss.Left, titlePart, "  ", loadingPart)
 		}
 	} else if m.Err != nil {
-		// Show error message prominently - use plain text for visibility
-		errorText := m.Err.Error()
-		errorMsg := "!!! CONNECTION ERROR: " + errorText + " !!!"
-		elements = append(elements, errorMsg)
-		// For debugging: also print to console 
-		fmt.Printf("[DEBUG] Error being displayed: %s\n errorMsg: %s\n", errorText, errorMsg)
+		// Show error inline with title - clean and seamless
+		titlePart := styles.TitleStyle.Render(baseTitle)
+		errorText := fmt.Sprintf("🚨 %s", m.Err.Error())
+		errorPart := styles.ErrorStyle.Render(errorText)
+		titleLine = lipgloss.JoinHorizontal(lipgloss.Left, titlePart, "  ", errorPart)
+	} else if m.QueryResult != "" {
+		// Show success message inline with title
+		titlePart := styles.TitleStyle.Render(baseTitle)
+		successText := m.QueryResult
+		successPart := styles.SuccessStyle.Render(successText)
+		titleLine = lipgloss.JoinHorizontal(lipgloss.Left, titlePart, "  ", successPart)
+	} else {
+		// Just the title
+		titleLine = styles.TitleStyle.Render(baseTitle)
 	}
+	
+	elements = append(elements, titleLine)
 	
 	// Add spacing before the list
 	elements = append(elements, "")
@@ -61,8 +73,8 @@ func SavedConnectionsView(m models.Model) string {
 	elements = append(elements, listContent)
 	
 	// Add empty state message if needed (but don't show list)
-	if len(m.SavedConnections) == 0 && !m.IsConnecting && m.Err == nil {
-		elements = []string{title, "", styles.InfoStyle.Render("📝 No saved connections yet.\n\nGo back and create your first connection!")}
+	if len(m.SavedConnections) == 0 && !m.IsConnecting && m.Err == nil && m.QueryResult == "" {
+		elements = []string{titleLine, "", styles.InfoStyle.Render("📝 No saved connections yet.\n\nGo back and create your first connection!")}
 	}
 
 	// Join all elements
@@ -70,6 +82,7 @@ func SavedConnectionsView(m models.Model) string {
 
 	helpText := styles.HelpStyle.Render(
 		styles.KeyStyle.Render("enter") + ": connect • " +
+			styles.KeyStyle.Render("d") + ": delete • " +
 			styles.KeyStyle.Render("esc") + ": back",
 	)
 

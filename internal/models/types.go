@@ -126,6 +126,7 @@ type Model struct {
 	ConnectionStr        string
 	DB                   *sql.DB
 	Err                  error
+	ErrorTimeout         *time.Time // When to clear the error (nil means no timeout)
 	Tables               []string
 	TableInfos           []TableInfo
 	SelectedTable        string
@@ -273,6 +274,7 @@ type RelationshipsResult struct {
 
 type ClearResultMsg struct{}
 type ClearErrorMsg struct{}
+type ErrorTimeoutMsg struct{}
 
 type ExportResult struct {
 	Success  bool

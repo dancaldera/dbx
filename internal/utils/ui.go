@@ -3,9 +3,11 @@ package utils
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/table"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dancaldera/dbx/internal/models"
 	"github.com/dancaldera/dbx/internal/styles"
 )
@@ -294,6 +296,32 @@ func UpdateRowDetailList(columns []string, rowData []string) []list.Item {
 		}
 	}
 	return items
+}
+
+// SetErrorWithTimeout sets an error on the model that will auto-clear after the specified duration
+func SetErrorWithTimeout(m models.Model, err error, duration time.Duration) (models.Model, tea.Cmd) {
+	updatedModel := m
+	updatedModel.Err = err
+	if err != nil {
+		timeout := time.Now().Add(duration)
+		updatedModel.ErrorTimeout = &timeout
+		return updatedModel, tea.Tick(duration, func(t time.Time) tea.Msg {
+			return models.ErrorTimeoutMsg{}
+		})
+	} else {
+		updatedModel.ErrorTimeout = nil
+	}
+	return updatedModel, nil
+}
+
+// ClearErrorTimeout clears error timeout and error if the timeout has expired
+func ClearErrorTimeout(m models.Model) models.Model {
+	updatedModel := m
+	if m.ErrorTimeout != nil && time.Now().After(*m.ErrorTimeout) {
+		updatedModel.Err = nil
+		updatedModel.ErrorTimeout = nil
+	}
+	return updatedModel
 }
 
 // UpdateSavedConnectionsItems creates list items from saved connections
