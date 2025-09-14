@@ -6,6 +6,7 @@
   - `database/` (DB queries and adapters)
   - `models/` (core types and state)
   - `styles/` (theme/styling)
+  - `state/` (state management and view handlers)
   - `utils/` (helper functions and utilities)
   - `views/` (UI view rendering)
 - Root `main.go`: main entry point with app logic and update handlers.
@@ -25,12 +26,13 @@ dbx/
 │   ├── database/               # Database operations and adapters
 │   ├── models/                 # Core types and interfaces
 │   ├── styles/                 # UI theming
+│   ├── state/                  # State management and view handlers
 │   ├── utils/                  # Helper functions and utilities
 │   └── views/                  # UI view rendering
 ```
 - Core states: `dbTypeView`, `connectionView`, `schemaView`, `tablesView`, `columnsView`, `queryView`, `queryHistoryView`.
-- Package roles: `config` (persistence), `database` (queries), `models` (types), `styles` (theme), `utils` (helpers), `views` (rendering).
-- Update logic: implemented in `main.go` via `appModel` wrapper pattern (Go best practice for extending models from other packages).
+- Package roles: `config` (persistence), `database` (queries), `models` (types), `state` (view update handlers), `styles` (theme), `utils` (helpers), `views` (rendering).
+- Update logic: implemented in `main.go` with state handlers in `state/` via `appModel` wrapper pattern (Go best practice for extending models from other packages).
 - Key deps: `bubbletea`, `bubbles`, `lipgloss`; DB drivers: `lib/pq`, `go-sql-driver/mysql`, `mattn/go-sqlite3`.
 
 ## Build, Test, and Development
