@@ -13,6 +13,11 @@ import (
 	"github.com/dancaldera/dbx/internal/utils"
 )
 
+var (
+	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
+	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(styles.AccentBlue)
+)
+
 // HandleDataPreviewViewUpdate handles all updates for the DataPreviewView state.
 // Note: The 'enter' key to switch to RowDetailView is handled in main.go due to a dependency on the FieldItemDelegate.
 func HandleDataPreviewViewUpdate(m models.Model, msg tea.Msg) (models.Model, tea.Cmd) {
@@ -180,33 +185,27 @@ func (d FieldItemDelegate) Render(w io.Writer, m list.Model, index int, it list.
 		return
 	}
 
-	// Determine type and simple prefix when selected
+	// Determine type
 	t := utils.InferFieldType(fi.Value)
-	prefix := "  "
-	if index == m.Index() {
-		prefix = "> "
-	}
 
-	// Compose: prefix + Name: value [Type]
+	// Compose the display string: Name: value [Type]
 	namePart := fi.Name + ": "
-	// Style type badge
 	badge := styles.TypeBadgeStyle.Render("[" + t + "]")
-	// Keep a space before the badge
-	spaceBeforeBadge := 1
-
-	// Sanitize value to single line to prevent layout issues
 	single := utils.SanitizeValueForDisplay(fi.Value)
 
-	// Budget for value so type is always shown (use display widths)
-	budget := width - lipgloss.Width(prefix) - lipgloss.Width(namePart) - spaceBeforeBadge - lipgloss.Width(badge)
+	// Calculate budget for value to fit within width
+	budget := width - lipgloss.Width(namePart) - 1 - lipgloss.Width(badge)
 	budget = utils.Max(budget, 0)
 	val := utils.TruncateWithEllipsis(single, budget, "...")
 
-	line := prefix + namePart + val + strings.Repeat(" ", spaceBeforeBadge) + badge
+	str := namePart + val + " " + badge
 
-	// Style when selected (apply to entire line for clarity)
+	fn := itemStyle.Render
 	if index == m.Index() {
-		line = styles.FocusedStyle.Render(line)
+		fn = func(s ...string) string {
+			return selectedItemStyle.Render("> " + strings.Join(s, " "))
+		}
 	}
-	fmt.Fprint(w, line)
+
+	fmt.Fprint(w, fn(str))
 }
