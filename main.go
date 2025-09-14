@@ -113,6 +113,39 @@ func initialModel() models.Model {
 	tablesList.SetFilteringEnabled(false)
 	tablesList.SetShowHelp(false)
 
+	// Query history list
+	queryHistoryList := list.New([]list.Item{}, styles.GetBlueListDelegate(), 0, 0)
+	queryHistoryList.Title = "Query History"
+	qhLS := list.DefaultStyles()
+	qhLS.Title = styles.ListTitleStyle
+	qhLS.TitleBar = lipgloss.NewStyle()
+	queryHistoryList.Styles = qhLS
+	queryHistoryList.SetShowStatusBar(false)
+	queryHistoryList.SetFilteringEnabled(false)
+	queryHistoryList.SetShowHelp(false)
+
+	// Populate query history list items
+	if len(queryHistory) > 0 {
+		historyItems := make([]list.Item, len(queryHistory))
+		for i, entry := range queryHistory {
+			// Format timestamp
+			timestamp := entry.Timestamp.Format("2006-01-02 15:04:05")
+			// Create description with success status and row count
+			desc := fmt.Sprintf("%s • %s", timestamp, entry.Database)
+			if entry.Success && entry.RowCount > 0 {
+				desc += fmt.Sprintf(" • %d rows", entry.RowCount)
+			} else if !entry.Success {
+				desc += " • Failed"
+			}
+
+			historyItems[i] = models.Item{
+				ItemTitle: entry.Query,
+				ItemDesc:  desc,
+			}
+		}
+		queryHistoryList.SetItems(historyItems)
+	}
+
 	// Columns table
 	columns := []table.Column{
 		{Title: "Column", Width: 20},
@@ -163,6 +196,7 @@ func initialModel() models.Model {
 		SelectedSchema:          "public", // Default to public schema for PostgreSQL
 		SavedConnections:        savedConnections,
 		QueryHistory:            queryHistory,
+		QueryHistoryList:        queryHistoryList,
 		EditingConnectionIdx:    -1,
 		FullTextItemsPerPage:    5,           // Show 5 fields per page in full text view
 		FieldDetailLinesPerPage: 25,          // Show 25 lines per page in field detail view
@@ -379,6 +413,18 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Model = updatedModel
 				return m, cmd
 			}
+		case "r":
+			// Navigate to QueryView from DataPreviewView
+			if m.State == models.DataPreviewView {
+				m.State = models.QueryView
+				return m, nil
+			}
+		case "ctrl+h":
+			// Navigate to QueryHistoryView from various views
+			if m.State == models.DataPreviewView || m.State == models.TablesView || m.State == models.QueryView {
+				m.State = models.QueryHistoryView
+				return m, nil
+			}
 		}
 	}
 
@@ -456,6 +502,14 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		updatedModel, cmd := state.HandleRowDetailViewUpdate(m.Model, msg)
 		m.Model = updatedModel
 		return m, cmd
+	case models.QueryView:
+		updatedModel, cmd := state.HandleQueryViewUpdate(m.Model, msg)
+		m.Model = updatedModel
+		return m, cmd
+	case models.QueryHistoryView:
+		updatedModel, cmd := state.HandleQueryHistoryViewUpdate(m.Model, msg)
+		m.Model = updatedModel
+		return m, cmd
 	}
 
 	return m, cmd
@@ -481,6 +535,10 @@ func (m appModel) View() string {
 		return views.RelationshipsView(m.Model)
 	case models.ColumnsView:
 		return views.ColumnsView(m.Model)
+	case models.QueryView:
+		return views.QueryView(m.Model)
+	case models.QueryHistoryView:
+		return views.QueryHistoryView(m.Model)
 	default:
 		return "View not implemented yet"
 	}

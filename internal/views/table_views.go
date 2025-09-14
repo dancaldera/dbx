@@ -54,6 +54,8 @@ func TablesView(m models.Model) string {
 		styles.KeyStyle.Render("enter") + ": preview data • " +
 			styles.KeyStyle.Render("v") + ": view columns • " +
 			styles.KeyStyle.Render("f") + ": relationships • " +
+			styles.KeyStyle.Render("r") + ": run query • " +
+			styles.KeyStyle.Render("ctrl+h") + ": query history • " +
 			styles.KeyStyle.Render("esc") + ": disconnect")
 
 	return styles.DocStyle.Render(content + "\n" + helpText)

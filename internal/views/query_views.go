@@ -263,8 +263,8 @@ func DataPreviewView(m models.Model) string {
 		utilityHelp := styles.KeyStyle.Render("r") + ": reload • " + styles.KeyStyle.Render("ESC") + ": back"
 
 		helpText = styles.HelpStyle.Render(
-			"📍 " + navigationHelp + " • " + actionHelp + " • " + pageHelp + "\n" +
-				"⚡ " + featureHelp + " • " + utilityHelp)
+			navigationHelp + " • " + actionHelp + " • " + pageHelp + "\n" +
+				featureHelp + " • " + utilityHelp)
 	}
 
 	content += "\n" + helpText
