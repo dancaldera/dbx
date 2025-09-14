@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/table"
@@ -18,6 +16,7 @@ import (
 
 	"github.com/dancaldera/dbx/internal/config"
 	"github.com/dancaldera/dbx/internal/models"
+	"github.com/dancaldera/dbx/internal/state"
 	"github.com/dancaldera/dbx/internal/styles"
 	"github.com/dancaldera/dbx/internal/utils"
 	"github.com/dancaldera/dbx/internal/views"
@@ -248,8 +247,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.SearchInput.Width = msg.Width - h - 4
 
 		// Update textarea size for field editing
-		textareaWidth := max(msg.Width-h-4, 40)
-		textareaHeight := max(msg.Height-v-8, 5) // Reserve space for title and help text only
+		textareaWidth := utils.Max(msg.Width-h-4, 40)
+		textareaHeight := utils.Max(msg.Height-v-8, 5) // Reserve space for title and help text only
 		m.FieldTextarea.SetWidth(textareaWidth)
 		m.FieldTextarea.SetHeight(textareaHeight)
 
@@ -268,53 +267,42 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "q":
 			if m.State == models.DBTypeView {
-				if m.DB != nil {
-					m.DB.Close()
-				}
-				return m, tea.Quit
+				updatedModel, cmd := state.HandleDBTypeViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			}
 
 		case "esc":
 			switch m.State {
 			case models.SavedConnectionsView:
-				m.State = models.DBTypeView
-				m.Err = nil
-				return m, nil
+				updatedModel, cmd := state.HandleSavedConnectionsViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			case models.ConnectionView:
-				m.State = models.DBTypeView
-				m.Err = nil
-				return m, nil
+				updatedModel, cmd := state.HandleConnectionViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			case models.SaveConnectionView:
-				m.State = models.ConnectionView
-				m.Err = nil
-				return m, nil
+				updatedModel, cmd := state.HandleSaveConnectionViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			case models.EditConnectionView:
 				m.State = models.SavedConnectionsView
 				m.Err = nil
 				m.EditingConnectionIdx = -1
 				return m, nil
 			case models.TablesView:
-				if m.DB != nil {
-					m.DB.Close()
-					m.DB = nil
-				}
-				m.State = models.DBTypeView
-				m.ConnectionStr = ""
-				m.Tables = nil
-				m.TableInfos = nil
-				m.SelectedTable = ""
-				m.Err = nil
-				return m, nil
+				updatedModel, cmd := state.HandleTablesViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			case models.ColumnsView:
-				m.State = models.TablesView
-				return m, nil
+				updatedModel, cmd := state.HandleColumnsViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			case models.DataPreviewView:
-				// Only handle ESC if not in sort or filter mode
-				if !m.DataPreviewSortMode && !m.DataPreviewFilterActive {
-					m.State = models.TablesView
-					return m, nil
-				}
-				// Let the specific DataPreviewView handler deal with sort/filter mode ESC
+				updatedModel, cmd := state.HandleDataPreviewViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			case models.RelationshipsView:
 				m.State = models.TablesView
 				return m, nil
@@ -323,186 +311,73 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "s":
 			if m.State == models.DBTypeView {
-				m.State = models.SavedConnectionsView
-				if connections, err := config.LoadSavedConnections(); err == nil {
-					m.SavedConnections = connections
-				}
-				m.Model = utils.UpdateSavedConnectionsList(m.Model)
-				return m, nil
+				updatedModel, cmd := state.HandleDBTypeViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			}
-			if m.State == models.ColumnsView && m.ConnectionStr != "" {
-				m.State = models.SaveConnectionView
-				m.NameInput.SetValue("")
-				m.NameInput.Focus()
-				return m, nil
+			if m.State == models.ColumnsView {
+				updatedModel, cmd := state.HandleColumnsViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			}
 
 		case "f1":
-			if m.State == models.ConnectionView && !m.IsTestingConnection {
-				m.ConnectionStr = m.TextInput.Value()
-				if m.ConnectionStr != "" {
-					m.IsTestingConnection = true
-					m.Err = nil
-					m.QueryResult = ""
-					return m, utils.TestConnection(m.SelectedDB.Driver, m.ConnectionStr)
-				}
+			if m.State == models.ConnectionView {
+				updatedModel, cmd := state.HandleConnectionViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			}
 
 		case "enter":
 			switch m.State {
 			case models.DBTypeView:
-				if i, ok := m.DBTypeList.SelectedItem().(models.Item); ok {
-					for _, db := range models.SupportedDatabaseTypes {
-						if db.Name == i.ItemTitle {
-							m.SelectedDB = db
-							break
-						}
-					}
-					m.State = models.ConnectionView
-					m.NameInput.SetValue("")
-					m.TextInput.SetValue("")
-					m.TextInput.Blur()
-					m.NameInput.Focus()
-
-					// Set placeholder according to DB type
-					switch m.SelectedDB.Driver {
-					case "postgres":
-						m.TextInput.Placeholder = "postgres://user:password@localhost/dbname?sslmode=disable"
-					case "mysql":
-						m.TextInput.Placeholder = "user:password@tcp(localhost:3306)/dbname"
-					case "sqlite3":
-						m.TextInput.Placeholder = "/path/to/database.db"
-					}
-				}
+				updatedModel, cmd := state.HandleDBTypeViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 
 			case models.ConnectionView:
-				if !m.IsConnecting && !m.IsTestingConnection {
-					m.ConnectionStr = m.TextInput.Value()
-					if m.ConnectionStr != "" {
-						// Save connection if a name is provided
-						connectionName := strings.TrimSpace(m.NameInput.Value())
-						if connectionName != "" {
-							// Check if connection name already exists
-							nameExists := false
-							for i, conn := range m.SavedConnections {
-								if conn.Name == connectionName {
-									// Update existing connection
-									m.SavedConnections[i] = models.SavedConnection{
-										Name:          connectionName,
-										Driver:        m.SelectedDB.Driver,
-										ConnectionStr: m.ConnectionStr,
-									}
-									nameExists = true
-									break
-								}
-							}
-							// Add new connection if name doesn't exist
-							if !nameExists {
-								newConnection := models.SavedConnection{
-									Name:          connectionName,
-									Driver:        m.SelectedDB.Driver,
-									ConnectionStr: m.ConnectionStr,
-								}
-								m.SavedConnections = append(m.SavedConnections, newConnection)
-							}
-							config.SaveConnections(m.SavedConnections)
-						}
-
-						// Connect to database
-						m.IsConnecting = true
-						m.Err = nil
-						m.QueryResult = ""
-						return m, utils.ConnectToDB(m.SelectedDB, m.ConnectionStr)
-					}
-				}
+				updatedModel, cmd := state.HandleConnectionViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 
 			case models.SavedConnectionsView:
-				if i, ok := m.SavedConnectionsList.SelectedItem().(models.Item); ok && !m.IsConnecting {
-					for _, conn := range m.SavedConnections {
-						if conn.Name == i.ItemTitle {
-							for _, db := range models.SupportedDatabaseTypes {
-								if db.Driver == conn.Driver {
-									m.SelectedDB = db
-									break
-								}
-							}
-							m.ConnectionStr = conn.ConnectionStr
-							m.IsConnecting = true
-							m.Err = nil
-							m.QueryResult = "" // Clear any previous messages
-							return m, utils.ConnectToDB(m.SelectedDB, m.ConnectionStr)
-						}
-					}
-				}
+				updatedModel, cmd := state.HandleSavedConnectionsViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 
 			case models.SaveConnectionView:
-				name := m.NameInput.Value()
-				if name != "" {
-					newConnection := models.SavedConnection{
-						Name:          name,
-						Driver:        m.SelectedDB.Driver,
-						ConnectionStr: m.ConnectionStr,
-					}
-					m.SavedConnections = append(m.SavedConnections, newConnection)
-					config.SaveConnections(m.SavedConnections)
-					m.State = models.ConnectionView
-					return m, nil
-				}
+				updatedModel, cmd := state.HandleSaveConnectionViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 
 			case models.TablesView:
-				if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingPreview {
-					m.SelectedTable = i.ItemTitle
-					m.IsLoadingPreview = true
-					m.DataPreviewCurrentPage = 0 // Reset to first page
-					m.Err = nil
-					return m, utils.LoadDataPreview(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn)
-				}
+				updatedModel, cmd := state.HandleTablesViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			}
 		case "p":
-			// Keep "p" as an alias for preview
 			if m.State == models.TablesView {
-				if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingPreview {
-					m.SelectedTable = i.ItemTitle
-					m.IsLoadingPreview = true
-					m.DataPreviewCurrentPage = 0 // Reset to first page
-					m.Err = nil
-					return m, utils.LoadDataPreview(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn)
-				}
+				updatedModel, cmd := state.HandleTablesViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			}
 		case "v":
 			if m.State == models.TablesView {
-				if i, ok := m.TablesList.SelectedItem().(models.Item); ok && !m.IsLoadingColumns {
-					m.SelectedTable = i.ItemTitle
-					m.IsLoadingColumns = true
-					m.Err = nil
-					return m, utils.LoadColumns(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema)
-				}
+				updatedModel, cmd := state.HandleTablesViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			}
 		case "f":
-			if m.State == models.TablesView && m.DB != nil {
-				return m, utils.LoadRelationships(m.DB, m.SelectedDB, m.SelectedSchema)
+			if m.State == models.TablesView {
+				updatedModel, cmd := state.HandleTablesViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			}
 		case "d":
 			if m.State == models.SavedConnectionsView && !m.IsConnecting {
-				// Delete the currently selected saved connection
-				if selectedItem, ok := m.SavedConnectionsList.SelectedItem().(models.Item); ok {
-					connectionName := selectedItem.ItemTitle
-					// Find and remove the connection
-					for i, conn := range m.SavedConnections {
-						if conn.Name == connectionName {
-							// Remove connection from slice
-							m.SavedConnections = append(m.SavedConnections[:i], m.SavedConnections[i+1:]...)
-							// Save updated connections
-							config.SaveConnections(m.SavedConnections)
-							// Update the list
-							m.Model = utils.UpdateSavedConnectionsList(m.Model)
-							// Show success message
-							m.QueryResult = fmt.Sprintf("✅ Deleted connection '%s'", connectionName)
-							break
-						}
-					}
-				}
-				return m, utils.ClearResultAfterTimeout()
+				updatedModel, cmd := state.HandleSavedConnectionsViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
 			}
 		}
 	}
@@ -510,341 +385,77 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Update components according to state
 	switch m.State {
 	case models.DBTypeView:
-		m.DBTypeList, cmd = m.DBTypeList.Update(msg)
+		updatedModel, cmd := state.HandleDBTypeViewUpdate(m.Model, msg)
+		m.Model = updatedModel
+		return m, cmd
 	case models.SavedConnectionsView:
-		m.SavedConnectionsList, cmd = m.SavedConnectionsList.Update(msg)
+		updatedModel, cmd := state.HandleSavedConnectionsViewUpdate(m.Model, msg)
+		m.Model = updatedModel
+		return m, cmd
 	case models.ConnectionView:
-		if msg, ok := msg.(tea.KeyMsg); ok {
-			switch msg.String() {
-			case "tab":
-				if m.NameInput.Focused() {
-					m.NameInput.Blur()
-					m.TextInput.Focus()
-				} else {
-					m.TextInput.Blur()
-					m.NameInput.Focus()
-				}
-				return m, nil
-			}
-		}
-
-		if m.NameInput.Focused() {
-			m.NameInput, cmd = m.NameInput.Update(msg)
-		} else {
-			m.TextInput, cmd = m.TextInput.Update(msg)
-		}
+		updatedModel, cmd := state.HandleConnectionViewUpdate(m.Model, msg)
+		m.Model = updatedModel
+		return m, cmd
 	case models.SaveConnectionView:
-		m.NameInput, cmd = m.NameInput.Update(msg)
+		updatedModel, cmd := state.HandleSaveConnectionViewUpdate(m.Model, msg)
+		m.Model = updatedModel
+		return m, cmd
 	case models.TablesView:
-		m.TablesList, cmd = m.TablesList.Update(msg)
+		updatedModel, cmd := state.HandleTablesViewUpdate(m.Model, msg)
+		m.Model = updatedModel
+		return m, cmd
 	case models.ColumnsView:
-		m.ColumnsTable, cmd = m.ColumnsTable.Update(msg)
+		updatedModel, cmd := state.HandleColumnsViewUpdate(m.Model, msg)
+		m.Model = updatedModel
+		return m, cmd
 	case models.DataPreviewView:
-		if km, ok := msg.(tea.KeyMsg); ok {
-			// Handle filter mode
-			if m.DataPreviewFilterActive {
-				switch km.String() {
-				case "enter":
-					// Apply filter
-					m.DataPreviewFilterValue = m.DataPreviewFilterInput.Value()
-					m.DataPreviewFilterActive = false
-					m.DataPreviewFilterInput.Blur()
-					m.DataPreviewCurrentPage = 0 // Reset to first page
-					return m, utils.LoadDataPreviewWithFilter(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewFilterValue, m.DataPreviewAllColumns, m.DataPreviewSortDirection, m.DataPreviewSortColumn)
-				case "esc":
-					// Cancel filter
-					m.DataPreviewFilterActive = false
-					m.DataPreviewFilterInput.Blur()
-					m.DataPreviewFilterInput.SetValue("")
-					return m, nil
-				default:
-					// Update filter input
-					m.DataPreviewFilterInput, cmd = m.DataPreviewFilterInput.Update(msg)
-					return m, cmd
-				}
-			}
+		// Handle 'enter' key separately to avoid dependency cycle with private fieldItemDelegate
+		if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "enter" {
+			// Enter row detail view
+			if len(m.DataPreviewAllRows) > 0 {
+				selectedRow := m.DataPreviewTable.Cursor()
+				if selectedRow >= 0 && selectedRow < len(m.DataPreviewAllRows) {
+					// Calculate the actual row index based on current page and table position
+					actualRowIndex := (m.DataPreviewCurrentPage * m.DataPreviewItemsPerPage) + selectedRow
+					if actualRowIndex < len(m.DataPreviewAllRows) {
+						m.SelectedRowData = m.DataPreviewAllRows[selectedRow] // Use the displayed row
+						m.SelectedRowIndex = actualRowIndex                   // Track the actual position in the dataset
 
-			// Handle sort mode
-			if m.DataPreviewSortMode {
-				switch km.String() {
-				case "up", "k":
-					// Move to previous column
-					currentIdx := -1
-					for i, col := range m.DataPreviewAllColumns {
-						if col == m.DataPreviewSortColumn {
-							currentIdx = i
-							break
-						}
-					}
-					if currentIdx > 0 {
-						m.DataPreviewSortColumn = m.DataPreviewAllColumns[currentIdx-1]
-					}
-					return m, nil
-				case "down", "j":
-					// Move to next column
-					currentIdx := -1
-					for i, col := range m.DataPreviewAllColumns {
-						if col == m.DataPreviewSortColumn {
-							currentIdx = i
-							break
-						}
-					}
-					if currentIdx >= 0 && currentIdx < len(m.DataPreviewAllColumns)-1 {
-						m.DataPreviewSortColumn = m.DataPreviewAllColumns[currentIdx+1]
-					} else if currentIdx == -1 && len(m.DataPreviewAllColumns) > 0 {
-						m.DataPreviewSortColumn = m.DataPreviewAllColumns[0]
-					}
-					return m, nil
-				case "enter":
-					// Toggle sort direction: off -> asc -> desc -> off
-					switch m.DataPreviewSortDirection {
-					case models.SortOff:
-						m.DataPreviewSortDirection = models.SortAsc
-					case models.SortAsc:
-						m.DataPreviewSortDirection = models.SortDesc
-					case models.SortDesc:
-						m.DataPreviewSortDirection = models.SortOff
-						m.DataPreviewSortColumn = ""
-					}
-					m.DataPreviewSortMode = false
-					m.DataPreviewCurrentPage = 0 // Reset to first page when sorting changes
-					return m, utils.LoadDataPreviewWithSort(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewCurrentPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn, m.DataPreviewFilterValue, m.DataPreviewAllColumns, m.DataPreviewTotalRows)
-				case "esc":
-					// Exit sort mode
-					m.DataPreviewSortMode = false
-					return m, nil
-				}
-				return m, nil
-			}
+						// Create list items for each field
+						items := utils.UpdateRowDetailList(m.DataPreviewAllColumns, m.SelectedRowData)
 
-			// Normal navigation mode
-			switch km.String() {
-			case "enter":
-				// Enter row detail view
-				if len(m.DataPreviewAllRows) > 0 {
-					selectedRow := m.DataPreviewTable.Cursor()
-					if selectedRow >= 0 && selectedRow < len(m.DataPreviewAllRows) {
-						// Calculate the actual row index based on current page and table position
-						actualRowIndex := (m.DataPreviewCurrentPage * m.DataPreviewItemsPerPage) + selectedRow
-						if actualRowIndex < len(m.DataPreviewAllRows) {
-							m.SelectedRowData = m.DataPreviewAllRows[selectedRow] // Use the displayed row
-							m.SelectedRowIndex = actualRowIndex                   // Track the actual position in the dataset
-
-							// Create list items for each field
-							items := utils.UpdateRowDetailList(m.DataPreviewAllColumns, m.SelectedRowData)
-
-							// Initialize the row detail list (full-width/height)
-							// Use custom delegate to show type badges aligned right
-							m.RowDetailList = list.New(items, fieldItemDelegate{}, 0, 0)
-							// Keep the outer view title; hide internal list title for cleaner look
-							m.RowDetailList.Title = ""
-							m.RowDetailList.SetShowTitle(false)
-							m.RowDetailList.SetShowStatusBar(false)
-							m.RowDetailList.SetFilteringEnabled(false)
-							// Hide built-in help to avoid duplicate help sections
-							m.RowDetailList.SetShowHelp(false)
-							// Size the list to available viewport immediately
-							h, v := styles.DocStyle.GetFrameSize()
-							// Reserve fewer lines so the title is visible and top items are not clipped
-							m.RowDetailList.SetSize(m.Width-h, m.Height-v-5)
-							m.IsViewingFieldDetail = false
-
-							m.State = models.RowDetailView
-							return m, nil
-						}
-					}
-				}
-				return m, nil
-			case "/":
-				// Start filter mode
-				m.DataPreviewFilterActive = true
-				m.DataPreviewFilterInput.Focus()
-				return m, nil
-			case "s":
-				// Start sort mode
-				m.DataPreviewSortMode = true
-				if m.DataPreviewSortColumn == "" && len(m.DataPreviewAllColumns) > 0 {
-					m.DataPreviewSortColumn = m.DataPreviewAllColumns[0] // Start with first column
-				}
-				return m, nil
-			case "r":
-				return m, utils.LoadDataPreview(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn)
-			case "left":
-				// Previous page
-				if m.DataPreviewCurrentPage > 0 {
-					m.DataPreviewCurrentPage--
-					return m, utils.LoadDataPreviewWithPagination(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewCurrentPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn, m.DataPreviewFilterValue, m.DataPreviewAllColumns, m.DataPreviewTotalRows)
-				}
-				return m, nil
-			case "right":
-				// Next page
-				totalPages := utils.CalculateTotalPages(m.DataPreviewTotalRows, m.DataPreviewItemsPerPage)
-				if m.DataPreviewCurrentPage < totalPages-1 {
-					m.DataPreviewCurrentPage++
-					return m, utils.LoadDataPreviewWithPagination(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewCurrentPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn, m.DataPreviewFilterValue, m.DataPreviewAllColumns, m.DataPreviewTotalRows)
-				}
-				return m, nil
-			case "h":
-				// Scroll left (show previous columns)
-				if m.DataPreviewScrollOffset > 0 {
-					m.DataPreviewScrollOffset--
-					m.Model = utils.CreateDataPreviewTable(m.Model)
-				}
-				return m, nil
-			case "l":
-				// Scroll right (show next columns)
-				totalCols := len(m.DataPreviewAllColumns)
-				if m.DataPreviewScrollOffset+m.DataPreviewVisibleCols < totalCols {
-					m.DataPreviewScrollOffset++
-					m.Model = utils.CreateDataPreviewTable(m.Model)
-				}
-				return m, nil
-			case "j", "k", "up", "down":
-				// Allow j/k and arrow keys to navigate within the table rows
-				m.DataPreviewTable, cmd = m.DataPreviewTable.Update(msg)
-				return m, cmd
-			}
-		}
-		m.DataPreviewTable, cmd = m.DataPreviewTable.Update(msg)
-	case models.RowDetailView:
-		if km, ok := msg.(tea.KeyMsg); ok {
-			switch km.String() {
-			case "enter":
-				if !m.IsViewingFieldDetail {
-					// Enter field detail view
-					if selectedItem, ok := m.RowDetailList.SelectedItem().(models.FieldItem); ok {
-						m.SelectedFieldForDetail = selectedItem.Name
-						m.IsViewingFieldDetail = true
-						// Reset scroll positions when entering field detail
-						m.FieldDetailScrollOffset = 0
-						m.FieldDetailHorizontalOffset = 0
-					}
-				}
-				return m, nil
-			case "e":
-				if !m.IsViewingFieldDetail && !m.IsEditingField {
-					// Enter field edit mode
-					if selectedItem, ok := m.RowDetailList.SelectedItem().(models.FieldItem); ok {
-						m.EditingFieldName = selectedItem.Name
-						m.OriginalFieldValue = selectedItem.Value
-
-						// Find the field index
-						for i, col := range m.DataPreviewAllColumns {
-							if col == selectedItem.Name {
-								m.EditingFieldIndex = i
-								break
-							}
-						}
-
-						// Initialize textarea with current value and place cursor at start
-						m.FieldTextarea.SetValue(selectedItem.Value)
-						m.FieldTextarea.CursorStart()
-
-						// Set responsive textarea size
+						// Initialize the row detail list (full-width/height)
+						// Use custom delegate to show type badges aligned right
+						m.RowDetailList = list.New(items, state.FieldItemDelegate{}, 0, 0)
+						// Keep the outer view title; hide internal list title for cleaner look
+						m.RowDetailList.Title = ""
+						m.RowDetailList.SetShowTitle(false)
+						m.RowDetailList.SetShowStatusBar(false)
+						m.RowDetailList.SetFilteringEnabled(false)
+						// Hide built-in help to avoid duplicate help sections
+						m.RowDetailList.SetShowHelp(false)
+						// Size the list to available viewport immediately
 						h, v := styles.DocStyle.GetFrameSize()
-						textareaWidth := max(m.Width-h-4, 40)
-						// Use more space now that we only render the textarea in edit view
-						textareaHeight := max(m.Height-v-8, 5) // Reserve space for title and help text only
-						m.FieldTextarea.SetWidth(textareaWidth)
-						m.FieldTextarea.SetHeight(textareaHeight)
+						// Reserve fewer lines so the title is visible and top items are not clipped
+						m.RowDetailList.SetSize(m.Width-h, m.Height-v-5)
+						m.IsViewingFieldDetail = false
 
-						m.FieldTextarea.Focus()
-						m.IsEditingField = true
+						m.State = models.RowDetailView
+						return m, nil
 					}
-				}
-				return m, nil
-			case "esc":
-				if m.IsEditingField {
-					// Exit edit mode without saving
-					m.IsEditingField = false
-					m.FieldTextarea.Blur()
-					m.EditingFieldName = ""
-					m.OriginalFieldValue = ""
-					return m, nil
-				} else if m.IsViewingFieldDetail {
-					// Exit field detail view, back to field list
-					m.IsViewingFieldDetail = false
-				} else {
-					// Return to data preview
-					m.State = models.DataPreviewView
-				}
-				return m, nil
-			case "ctrl+s":
-				if m.IsEditingField {
-					// Save the edited field
-					newValue := m.FieldTextarea.Value()
-					return m, utils.SaveFieldEdit(m.DB, m.SelectedDB, m.SelectedSchema, m.SelectedTable, m.EditingFieldName, m.DataPreviewAllColumns, m.SelectedRowData, m.EditingFieldIndex, newValue)
-				}
-				return m, nil
-			case "ctrl+k":
-				if m.IsEditingField {
-					// Clear all text in the edit textarea
-					m.FieldTextarea.SetValue("")
-					m.FieldTextarea.CursorStart()
-				}
-				return m, nil
-			case "up", "k":
-				if m.IsViewingFieldDetail {
-					// Scroll up in field detail view
-					if m.FieldDetailScrollOffset > 0 {
-						m.FieldDetailScrollOffset--
-					}
-					return m, nil
-				}
-			case "down", "j":
-				if m.IsViewingFieldDetail {
-					// Scroll down in field detail view
-					fieldValue := ""
-					for i, col := range m.DataPreviewAllColumns {
-						if col == m.SelectedFieldForDetail && i < len(m.SelectedRowData) {
-							fieldValue = m.SelectedRowData[i]
-							break
-						}
-					}
-					// Calculate max scroll based on field content and dynamic height
-					lines := len(strings.Split(fieldValue, "\n"))
-					availableHeight := m.Height - 10 // Same calculation as in view
-					availableHeight = max(availableHeight, 5)
-					maxScroll := lines - availableHeight
-					maxScroll = max(maxScroll, 0)
-					if m.FieldDetailScrollOffset < maxScroll {
-						m.FieldDetailScrollOffset++
-					}
-					return m, nil
-				}
-			case "left", "h":
-				if m.IsViewingFieldDetail {
-					// Calculate scroll increment based on available width
-					availableWidth := min(max(m.Width-10, 40), 200)
-					scrollIncrement := max(availableWidth/4, 5) // Scroll by 1/4 of screen width, minimum 5
-
-					m.FieldDetailHorizontalOffset = max(m.FieldDetailHorizontalOffset-scrollIncrement, 0)
-					return m, nil
-				}
-			case "right", "l":
-				if m.IsViewingFieldDetail {
-					// Calculate scroll increment based on available width
-					availableWidth := min(max(m.Width-10, 40), 200)
-					scrollIncrement := max(availableWidth/4, 5) // Scroll by 1/4 of screen width, minimum 5
-
-					m.FieldDetailHorizontalOffset += scrollIncrement
-					return m, nil
 				}
 			}
-		}
-
-		// Update components based on mode
-		if m.IsEditingField {
-			// Update textarea when in edit mode
-			m.FieldTextarea, cmd = m.FieldTextarea.Update(msg)
-			return m, cmd
-		} else if !m.IsViewingFieldDetail {
-			// Update list when in field list mode
-			m.RowDetailList, cmd = m.RowDetailList.Update(msg)
-		} else {
-			// When viewing field detail, don't let other key handlers interfere
 			return m, nil
 		}
+
+		// Delegate all other messages to the state handler
+		updatedModel, cmd := state.HandleDataPreviewViewUpdate(m.Model, msg)
+		m.Model = updatedModel
+		return m, cmd
+	case models.RowDetailView:
+		updatedModel, cmd := state.HandleRowDetailViewUpdate(m.Model, msg)
+		m.Model = updatedModel
+		return m, cmd
 	}
 
 	return m, cmd
@@ -882,52 +493,4 @@ func main() {
 		fmt.Printf("Error running program: %v", err)
 		os.Exit(1)
 	}
-}
-
-// fieldItemDelegate renders field name/value with a right-aligned type badge.
-type fieldItemDelegate struct{}
-
-func (d fieldItemDelegate) Height() int                               { return 1 }
-func (d fieldItemDelegate) Spacing() int                              { return 0 }
-func (d fieldItemDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
-
-func (d fieldItemDelegate) Render(w io.Writer, m list.Model, index int, it list.Item) {
-	fi, ok := it.(models.FieldItem)
-	if !ok {
-		return
-	}
-	width := m.Width()
-	if width <= 0 {
-		return
-	}
-
-	// Determine type and simple prefix when selected
-	t := utils.InferFieldType(fi.Value)
-	prefix := "  "
-	if index == m.Index() {
-		prefix = "> "
-	}
-
-	// Compose: prefix + Name: value [Type]
-	namePart := fi.Name + ": "
-	// Style type badge
-	badge := styles.TypeBadgeStyle.Render("[" + t + "]")
-	// Keep a space before the badge
-	spaceBeforeBadge := 1
-
-	// Sanitize value to single line to prevent layout issues
-	single := utils.SanitizeValueForDisplay(fi.Value)
-
-	// Budget for value so type is always shown (use display widths)
-	budget := width - lipgloss.Width(prefix) - lipgloss.Width(namePart) - spaceBeforeBadge - lipgloss.Width(badge)
-	budget = max(budget, 0)
-	val := utils.TruncateWithEllipsis(single, budget, "...")
-
-	line := prefix + namePart + val + strings.Repeat(" ", spaceBeforeBadge) + badge
-
-	// Style when selected (apply to entire line for clarity)
-	if index == m.Index() {
-		line = styles.FocusedStyle.Render(line)
-	}
-	fmt.Fprint(w, line)
 }
