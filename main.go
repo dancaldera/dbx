@@ -253,6 +253,46 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		updatedModel, cmd := utils.HandleFieldUpdateResult(m.Model, msg)
 		m.Model = updatedModel
 		return m, cmd
+	case models.QueryResultMsg:
+		m.IsExecutingQuery = false
+
+		if msg.Err != nil {
+			m.Err = msg.Err
+			m.QueryResult = ""
+		} else {
+			m.Err = nil
+			m.QueryResult = msg.Result
+
+			// Update query results table if we have columns and rows
+			if len(msg.Columns) > 0 && len(msg.Rows) > 0 {
+				// Create table columns
+				columns := make([]table.Column, len(msg.Columns))
+				for i, col := range msg.Columns {
+					columns[i] = table.Column{Title: col, Width: 20}
+				}
+
+				// Create table rows
+				rows := make([]table.Row, len(msg.Rows))
+				for i, row := range msg.Rows {
+					tableRow := make(table.Row, len(row))
+					for j, cell := range row {
+						tableRow[j] = cell
+					}
+					rows[i] = tableRow
+				}
+
+				// Update the table
+				m.QueryResultsTable = table.New(
+					table.WithColumns(columns),
+					table.WithRows(rows),
+					table.WithFocused(true),
+					table.WithHeight(10),
+				)
+				m.QueryResultsTable.SetStyles(styles.GetBlueTableStyles())
+			}
+		}
+
+		return m, nil
 	case models.ClearResultMsg:
 		m.QueryResult = ""
 		return m, nil

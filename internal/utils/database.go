@@ -427,3 +427,118 @@ func HandleFieldUpdateResult(m models.Model, msg models.FieldUpdateResult) (mode
 
 	return updatedModel, nil
 }
+
+// ExecuteQuery executes a user-provided SQL query and returns results
+func ExecuteQuery(db *sql.DB, selectedDB models.DBType, query string) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		// Trim whitespace from query
+		query = strings.TrimSpace(query)
+		if query == "" {
+			return models.QueryResultMsg{
+				Result: "",
+				Err:    fmt.Errorf("empty query"),
+			}
+		}
+
+		// Check if it's a SELECT query (for read-only operations)
+		isSelect := strings.HasPrefix(strings.ToUpper(query), "SELECT")
+
+		if isSelect {
+			// Execute SELECT query
+			rows, err := db.Query(query)
+			if err != nil {
+				return models.QueryResultMsg{
+					Result: "",
+					Err:    err,
+				}
+			}
+			defer rows.Close()
+
+			// Get column names
+			columns, err := rows.Columns()
+			if err != nil {
+				return models.QueryResultMsg{
+					Result: "",
+					Err:    err,
+				}
+			}
+
+			// Prepare result variables
+			values := make([]interface{}, len(columns))
+			scanArgs := make([]interface{}, len(columns))
+			for i := range values {
+				scanArgs[i] = &values[i]
+			}
+
+			// Collect all rows
+			var allRows [][]string
+			rowCount := 0
+			const maxRows = 1000 // Limit results to prevent memory issues
+
+			for rows.Next() && rowCount < maxRows {
+				err = rows.Scan(scanArgs...)
+				if err != nil {
+					return models.QueryResultMsg{
+						Result: "",
+						Err:    err,
+					}
+				}
+
+				row := make([]string, len(columns))
+				for i, val := range values {
+					if val != nil {
+						row[i] = fmt.Sprintf("%v", val)
+					} else {
+						row[i] = "NULL"
+					}
+				}
+				allRows = append(allRows, row)
+				rowCount++
+			}
+
+			if err = rows.Err(); err != nil {
+				return models.QueryResultMsg{
+					Result: "",
+					Err:    err,
+				}
+			}
+
+			// Create result message
+			var result string
+			if len(allRows) == 0 {
+				result = "Query executed successfully. No rows returned."
+			} else {
+				if rowCount >= maxRows {
+					result = fmt.Sprintf("Query executed successfully. Showing first %d rows out of more results.", maxRows)
+				} else {
+					result = fmt.Sprintf("Query executed successfully. Returned %d rows.", len(allRows))
+				}
+			}
+
+			return models.QueryResultMsg{
+				Result:  result,
+				Columns: columns,
+				Rows:    allRows,
+				Err:     nil,
+			}
+
+		} else {
+			// Execute non-SELECT query (INSERT, UPDATE, DELETE)
+			result, err := db.Exec(query)
+			if err != nil {
+				return models.QueryResultMsg{
+					Result: "",
+					Err:    err,
+				}
+			}
+
+			// Get affected rows count
+			rowsAffected, _ := result.RowsAffected()
+
+			return models.QueryResultMsg{
+				Result: fmt.Sprintf("Query executed successfully. %d rows affected.", rowsAffected),
+				Err:    nil,
+			}
+		}
+	})
+}

@@ -1,8 +1,11 @@
 package state
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dancaldera/dbx/internal/models"
+	"github.com/dancaldera/dbx/internal/utils"
 )
 
 // HandleQueryViewUpdate handles all updates for the QueryView state.
@@ -18,6 +21,19 @@ func HandleQueryViewUpdate(m models.Model, msg tea.Msg) (models.Model, tea.Cmd) 
 			m.Err = nil
 			m.QueryResult = ""
 			return m, nil
+
+		case "enter":
+			// Execute the SQL query
+			if !m.IsExecutingQuery {
+				query := strings.TrimSpace(m.QueryInput.Value())
+				if query != "" {
+					m.IsExecutingQuery = true
+					m.Err = nil
+					m.QueryResult = ""
+					return m, utils.ExecuteQuery(m.DB, m.SelectedDB, query)
+				}
+			}
+			return m, nil // Do nothing if already executing
 
 		case "tab":
 			// Switch focus between query input and results

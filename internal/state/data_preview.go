@@ -126,7 +126,7 @@ func HandleDataPreviewViewUpdate(m models.Model, msg tea.Msg) (models.Model, tea
 				m.DataPreviewSortColumn = m.DataPreviewAllColumns[0] // Default to first column
 			}
 			return m, nil
-		case "r":
+		case "ctrl+r":
 			// Reload/refresh data preview
 			return m, utils.LoadDataPreview(m.DB, m.SelectedDB, m.SelectedTable, m.SelectedSchema, m.DataPreviewItemsPerPage, m.DataPreviewSortDirection, m.DataPreviewSortColumn)
 		case "left":

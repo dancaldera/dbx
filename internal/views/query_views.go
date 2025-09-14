@@ -260,11 +260,11 @@ func DataPreviewView(m models.Model) string {
 		actionHelp := styles.KeyStyle.Render("ENTER") + ": row details"
 		pageHelp := styles.KeyStyle.Render("←→") + ": pages"
 		featureHelp := styles.KeyStyle.Render("/") + ": filter • " + styles.KeyStyle.Render("s") + ": sort"
-		utilityHelp := styles.KeyStyle.Render("r") + ": reload • " + styles.KeyStyle.Render("ESC") + ": back"
+		utilityHelp := styles.KeyStyle.Render("ctrl+r") + ": reload • " + styles.KeyStyle.Render("ESC") + ": back"
 
 		helpText = styles.HelpStyle.Render(
-			navigationHelp + " • " + actionHelp + " • " + pageHelp + "\n" +
-				featureHelp + " • " + utilityHelp)
+			"📍 " + navigationHelp + " • " + actionHelp + " • " + pageHelp + "\n" +
+				"⚡ " + featureHelp + " • " + utilityHelp)
 	}
 
 	content += "\n" + helpText

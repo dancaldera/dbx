@@ -272,6 +272,13 @@ type RelationshipsResult struct {
 	Err           error
 }
 
+type QueryResultMsg struct {
+	Result  string
+	Columns []string
+	Rows    [][]string
+	Err     error
+}
+
 type ClearResultMsg struct{}
 type ClearErrorMsg struct{}
 type ErrorTimeoutMsg struct{}
