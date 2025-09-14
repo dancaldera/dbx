@@ -53,9 +53,9 @@ func TablesView(m models.Model) string {
 	helpText := styles.HelpStyle.Render(
 		styles.KeyStyle.Render("enter") + ": preview data • " +
 			styles.KeyStyle.Render("v") + ": view columns • " +
-			styles.KeyStyle.Render("f") + ": relationships • " +
-			styles.KeyStyle.Render("r") + ": run query • " +
-			styles.KeyStyle.Render("ctrl+h") + ": query history • " +
+			styles.KeyStyle.Render("f") + ": relationships\n" +
+			styles.KeyStyle.Render("r") + ": run SQL queries • " +
+			styles.KeyStyle.Render("ctrl+h") + ": view query history • " +
 			styles.KeyStyle.Render("esc") + ": disconnect")
 
 	return styles.DocStyle.Render(content + "\n" + helpText)

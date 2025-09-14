@@ -275,9 +275,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				rows := make([]table.Row, len(msg.Rows))
 				for i, row := range msg.Rows {
 					tableRow := make(table.Row, len(row))
-					for j, cell := range row {
-						tableRow[j] = cell
-					}
+					copy(tableRow, row)
 					rows[i] = tableRow
 				}
 
@@ -454,14 +452,14 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 		case "r":
-			// Navigate to QueryView from DataPreviewView
-			if m.State == models.DataPreviewView {
+			// Navigate to QueryView from TablesView only
+			if m.State == models.TablesView {
 				m.State = models.QueryView
 				return m, nil
 			}
 		case "ctrl+h":
-			// Navigate to QueryHistoryView from various views
-			if m.State == models.DataPreviewView || m.State == models.TablesView || m.State == models.QueryView {
+			// Navigate to QueryHistoryView from TablesView and QueryView only
+			if m.State == models.TablesView || m.State == models.QueryView {
 				m.State = models.QueryHistoryView
 				return m, nil
 			}

@@ -247,11 +247,11 @@ func DataPreviewView(m models.Model) string {
 	var helpText string
 	if m.DataPreviewFilterActive {
 		helpText = styles.HelpStyle.Render(
-			"🔍 " + styles.KeyStyle.Render("ENTER") + ": apply filter • " +
+			styles.KeyStyle.Render("ENTER") + ": apply filter • " +
 				styles.KeyStyle.Render("ESC") + ": cancel filter")
 	} else if m.DataPreviewSortMode {
 		helpText = styles.HelpStyle.Render(
-			"🎯 " + styles.KeyStyle.Render("↑↓") + ": select column • " +
+			styles.KeyStyle.Render("↑↓") + ": select column • " +
 				styles.KeyStyle.Render("ENTER") + ": cycle sort (off→asc→desc) • " +
 				styles.KeyStyle.Render("ESC") + ": exit sort")
 	} else {
@@ -263,8 +263,8 @@ func DataPreviewView(m models.Model) string {
 		utilityHelp := styles.KeyStyle.Render("ctrl+r") + ": reload • " + styles.KeyStyle.Render("ESC") + ": back"
 
 		helpText = styles.HelpStyle.Render(
-			"📍 " + navigationHelp + " • " + actionHelp + " • " + pageHelp + "\n" +
-				"⚡ " + featureHelp + " • " + utilityHelp)
+			navigationHelp + " • " + actionHelp + " • " + pageHelp + "\n" +
+				featureHelp + " • " + utilityHelp)
 	}
 
 	content += "\n" + helpText
