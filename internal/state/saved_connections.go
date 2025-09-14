@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dancaldera/dbx/internal/config"
 	"github.com/dancaldera/dbx/internal/models"
@@ -64,6 +65,30 @@ func HandleSavedConnectionsViewUpdate(m models.Model, msg tea.Msg) (models.Model
 						return m, utils.ClearResultAfterTimeout()
 					}
 				}
+			}
+
+		case "c":
+			// Copy the connection string of the selected saved connection
+			if selectedItem, ok := m.SavedConnectionsList.SelectedItem().(models.Item); ok {
+				connectionName := selectedItem.ItemTitle
+				// Find the connection string
+				for _, conn := range m.SavedConnections {
+					if conn.Name == connectionName {
+						// Copy to clipboard
+						err := clipboard.WriteAll(conn.ConnectionStr)
+						if err != nil {
+							m.Err = fmt.Errorf("failed to copy to clipboard: %w", err)
+							return m, nil
+						}
+						// Show success message
+						m.QueryResult = fmt.Sprintf("✅ Copied connection string for '%s' to clipboard", connectionName)
+						// Return a command to clear the message after a timeout
+						return m, utils.ClearResultAfterTimeout()
+					}
+				}
+				// Connection not found
+				m.Err = fmt.Errorf("connection '%s' not found", connectionName)
+				return m, nil
 			}
 		}
 	}

@@ -80,6 +80,7 @@ func SavedConnectionsView(m models.Model) string {
 
 	helpText := styles.HelpStyle.Render(
 		styles.KeyStyle.Render("enter") + ": connect • " +
+			styles.KeyStyle.Render("c") + ": copy to clipboard • " +
 			styles.KeyStyle.Render("d") + ": delete • " +
 			styles.KeyStyle.Render("esc") + ": back",
 	)
