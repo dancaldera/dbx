@@ -22,6 +22,8 @@ import (
 	"github.com/dancaldera/dbx/internal/views"
 )
 
+const version = "v0.1.0"
+
 func initialModel() models.Model {
 	// Database types list
 	items := make([]list.Item, len(models.SupportedDatabaseTypes))
@@ -33,7 +35,7 @@ func initialModel() models.Model {
 	}
 
 	dbList := list.New(items, styles.GetBlueListDelegate(), 0, 0)
-	dbList.Title = "DBX — Database Explorer"
+	dbList.Title = fmt.Sprintf("DBX — Database Explorer %s", version)
 	// Remove any default title background and apply our title style
 	ls := list.DefaultStyles()
 	ls.Title = styles.ListTitleStyle

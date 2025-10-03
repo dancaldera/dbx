@@ -46,6 +46,12 @@ dbx/
 ### Additional Dev Commands
 - Update deps: `go mod download`.
 
+## Version Management
+- Version is defined as a constant in `main.go`: `const version = "v0.1.0"`.
+- Version format: follows semantic versioning (e.g., `v1.2.3`).
+- Displayed in the main view title: "DBX — Database Explorer v0.1.0".
+- To update the version: modify the `version` constant in `main.go`.
+
 ## Application Flow
 1. Choose DB type or select a saved connection.
 2. Enter connection string (per driver) if new.
