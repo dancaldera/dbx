@@ -2,7 +2,6 @@ package views
 
 import (
 	"fmt"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/dancaldera/dbx/internal/models"
 	"github.com/dancaldera/dbx/internal/styles"
@@ -10,73 +9,42 @@ import (
 
 // DBTypeView renders the database type selection screen
 func DBTypeView(m models.Model) string {
-	content := m.DBTypeList.View()
-
 	helpText := styles.HelpStyle.Render(
 		styles.KeyStyle.Render("enter") + ": select • " +
 			styles.KeyStyle.Render("s") + ": saved connections • " +
 			styles.KeyStyle.Render("q") + ": quit",
 	)
 
-	return styles.DocStyle.Render(content + "\n" + helpText)
+	return NewViewBuilder().
+		WithContent(m.DBTypeList.View()).
+		WithHelp(helpText).
+		Render()
 }
 
 // SavedConnectionsView renders the saved connections screen
 func SavedConnectionsView(m models.Model) string {
-	// Create the main content area
-	listContent := m.SavedConnectionsList.View()
+	builder := NewViewBuilder().WithTitle("📋 Saved Connections")
 
-	// Build layout with elements
-	var elements []string
-
-	// Build title with inline status/error
-	var titleLine string
-	baseTitle := "📋 Saved Connections"
-
+	// Determine status message and type
 	if m.IsConnecting {
-		// Show loading status inline with title using horizontal join
-		titlePart := styles.TitleStyle.Render(baseTitle)
+		statusMsg := "⏳ Connecting..."
 		if selectedItem, ok := m.SavedConnectionsList.SelectedItem().(models.Item); ok {
-			loadingText := fmt.Sprintf("⏳ Connecting to %s...", selectedItem.ItemTitle)
-			loadingPart := styles.LoadingStyle.Render(loadingText)
-			titleLine = lipgloss.JoinHorizontal(lipgloss.Left, titlePart, "  ", loadingPart)
-		} else {
-			loadingText := "⏳ Connecting..."
-			loadingPart := styles.LoadingStyle.Render(loadingText)
-			titleLine = lipgloss.JoinHorizontal(lipgloss.Left, titlePart, "  ", loadingPart)
+			statusMsg = fmt.Sprintf("⏳ Connecting to %s...", selectedItem.ItemTitle)
 		}
+		builder.WithStatus(statusMsg, StatusLoading)
 	} else if m.Err != nil {
-		// Show error inline with title - clean and seamless
-		titlePart := styles.TitleStyle.Render(baseTitle)
-		errorText := fmt.Sprintf("🚨 %s", m.Err.Error())
-		errorPart := styles.ErrorStyle.Render(errorText)
-		titleLine = lipgloss.JoinHorizontal(lipgloss.Left, titlePart, "  ", errorPart)
+		builder.WithStatus("🚨 "+m.Err.Error(), StatusError)
 	} else if m.QueryResult != "" {
-		// Show success message inline with title
-		titlePart := styles.TitleStyle.Render(baseTitle)
-		successText := m.QueryResult
-		successPart := styles.SuccessStyle.Render(successText)
-		titleLine = lipgloss.JoinHorizontal(lipgloss.Left, titlePart, "  ", successPart)
-	} else {
-		// Just the title
-		titleLine = styles.TitleStyle.Render(baseTitle)
+		builder.WithStatus(m.QueryResult, StatusSuccess)
 	}
 
-	elements = append(elements, titleLine)
-
-	// Add spacing before the list
-	elements = append(elements, "")
-
-	// Add the list
-	elements = append(elements, listContent)
-
-	// Add empty state message if needed (but don't show list)
+	// Handle empty state
 	if len(m.SavedConnections) == 0 && !m.IsConnecting && m.Err == nil && m.QueryResult == "" {
-		elements = []string{titleLine, "", styles.InfoStyle.Render("📝 No saved connections yet.\n\nGo back and create your first connection!")}
+		emptyState := RenderEmptyState("📝", "No saved connections yet.\n\nGo back and create your first connection!")
+		builder.WithContent(emptyState)
+	} else {
+		builder.WithContent(m.SavedConnectionsList.View())
 	}
-
-	// Join all elements
-	content := lipgloss.JoinVertical(lipgloss.Left, elements...)
 
 	helpText := styles.HelpStyle.Render(
 		styles.KeyStyle.Render("enter") + ": connect • " +
@@ -85,11 +53,12 @@ func SavedConnectionsView(m models.Model) string {
 			styles.KeyStyle.Render("esc") + ": back",
 	)
 
-	return styles.DocStyle.Render(content + "\n" + helpText)
+	return builder.WithHelp(helpText).Render()
 }
 
 // ConnectionView renders the database connection configuration screen
 func ConnectionView(m models.Model) string {
+	// Determine database icon
 	var dbIcon string
 	switch m.SelectedDB.Driver {
 	case "postgres":
@@ -102,35 +71,25 @@ func ConnectionView(m models.Model) string {
 		dbIcon = "🗄️"
 	}
 
-	title := styles.TitleStyle.Render(fmt.Sprintf("%s  Connect to %s", dbIcon, m.SelectedDB.Name))
+	title := fmt.Sprintf("%s  Connect to %s", dbIcon, m.SelectedDB.Name)
+	builder := NewViewBuilder().WithTitle(title)
 
-	var messageContent string
+	// Add status messages
 	if m.IsTestingConnection {
-		messageContent = "⏳ Testing connection..."
+		builder.WithStatus("⏳ Testing connection...", StatusLoading)
 	} else if m.IsConnecting {
-		messageContent = "⏳ Connecting to database..."
+		builder.WithStatus("⏳ Connecting to database...", StatusLoading)
 	} else if m.Err != nil {
-		messageContent = styles.ErrorStyle.Render("❌ " + m.Err.Error())
+		builder.WithStatus("❌ "+m.Err.Error(), StatusError)
 	} else if m.QueryResult != "" {
-		messageContent = styles.SuccessStyle.Render(m.QueryResult)
+		builder.WithStatus(m.QueryResult, StatusSuccess)
 	}
 
-	nameLabel := styles.SubtitleStyle.Render("Connection Name:")
-	var nameField string
-	if m.NameInput.Focused() {
-		nameField = styles.InputFocusedStyle.Render(m.NameInput.View())
-	} else {
-		nameField = styles.InputStyle.Render(m.NameInput.View())
-	}
+	// Input fields
+	nameField := RenderInputField("Connection Name:", m.NameInput.View(), m.NameInput.Focused())
+	connField := RenderInputField("Connection String:", m.TextInput.View(), m.TextInput.Focused())
 
-	connLabel := styles.SubtitleStyle.Render("Connection String:")
-	var connField string
-	if m.TextInput.Focused() {
-		connField = styles.InputFocusedStyle.Render(m.TextInput.View())
-	} else {
-		connField = styles.InputStyle.Render(m.TextInput.View())
-	}
-
+	// Examples based on database type
 	var exampleText string
 	switch m.SelectedDB.Driver {
 	case "postgres":
@@ -140,10 +99,7 @@ func ConnectionView(m models.Model) string {
 	case "sqlite3":
 		exampleText = "./database.db or /path/to/database.db"
 	}
-
-	examples := styles.InfoStyle.Render(
-		styles.SubtitleStyle.Render("Examples:") + "\n" + exampleText,
-	)
+	examples := RenderInfoBox(styles.SubtitleStyle.Render("Examples:") + "\n" + exampleText)
 
 	helpText := styles.HelpStyle.Render(
 		styles.KeyStyle.Render("Enter") + ": save and connect • " +
@@ -152,62 +108,70 @@ func ConnectionView(m models.Model) string {
 			styles.KeyStyle.Render("Esc") + ": back",
 	)
 
-	var elements []string
-	elements = append(elements, title)
-
-	if messageContent != "" {
-		elements = append(elements, messageContent)
-	}
-
-	elements = append(elements,
-		nameLabel,
-		nameField,
-		connLabel,
-		connField,
-		examples,
-		helpText,
-	)
-
-	content := lipgloss.JoinVertical(lipgloss.Left, elements...)
-	return styles.DocStyle.Render(content)
+	return builder.
+		WithContent(nameField, connField, examples).
+		WithHelp(helpText).
+		Render()
 }
 
 // SaveConnectionView renders the connection saving screen
 func SaveConnectionView(m models.Model) string {
-	content := styles.TitleStyle.Render("Save Connection") + "\n\n"
-	content += "Name for this connection:\n"
-	content += m.NameInput.View() + "\n\n"
-	content += "Connection to save:\n"
-	content += styles.HelpStyle.Render(fmt.Sprintf("%s: %s", m.SelectedDB.Name, m.ConnectionStr))
-	content += "\n\n" + styles.HelpStyle.Render("enter: save • esc: cancel")
-	return styles.DocStyle.Render(content)
+	nameField := RenderInputField("Name for this connection:", m.NameInput.View(), m.NameInput.Focused())
+
+	connectionInfo := styles.SubtitleStyle.Render("Connection to save:") + "\n" +
+		styles.HelpStyle.Render(fmt.Sprintf("%s: %s", m.SelectedDB.Name, m.ConnectionStr))
+
+	helpText := styles.HelpStyle.Render(
+		styles.KeyStyle.Render("enter") + ": save • " +
+			styles.KeyStyle.Render("esc") + ": cancel",
+	)
+
+	return NewViewBuilder().
+		WithTitle("Save Connection").
+		WithContent(nameField, connectionInfo).
+		WithHelp(helpText).
+		Render()
 }
 
 // EditConnectionView renders the connection editing screen
 func EditConnectionView(m models.Model) string {
-	content := styles.TitleStyle.Render("Edit Connection") + "\n\n"
+	builder := NewViewBuilder().WithTitle("Edit Connection")
 
+	// Add error status if present
 	if m.Err != nil {
-		content += styles.ErrorStyle.Render("❌ Error: "+m.Err.Error()) + "\n\n"
+		builder.WithStatus("❌ Error: "+m.Err.Error(), StatusError)
 	}
 
-	content += "Connection name:\n"
-	content += m.NameInput.View() + "\n\n"
+	// Connection name field
+	nameField := RenderInputField("Connection name:", m.NameInput.View(), m.NameInput.Focused())
 
-	content += fmt.Sprintf("Database type: %s\n", m.SelectedDB.Name)
-	content += "Connection string:\n"
-	content += m.TextInput.View() + "\n\n"
+	// Database type
+	dbType := fmt.Sprintf("Database type: %s", m.SelectedDB.Name)
 
-	content += "Examples:\n"
+	// Connection string field
+	connField := RenderInputField("Connection string:", m.TextInput.View(), m.TextInput.Focused())
+
+	// Examples
+	var exampleText string
 	switch m.SelectedDB.Driver {
 	case "postgres":
-		content += styles.HelpStyle.Render("postgres://user:password@localhost/dbname?sslmode=disable")
+		exampleText = "postgres://user:password@localhost/dbname?sslmode=disable"
 	case "mysql":
-		content += styles.HelpStyle.Render("user:password@tcp(localhost:3306)/dbname")
+		exampleText = "user:password@tcp(localhost:3306)/dbname"
 	case "sqlite3":
-		content += styles.HelpStyle.Render("./database.db or /path/to/database.db")
+		exampleText = "./database.db or /path/to/database.db"
 	}
+	examples := RenderInfoBox(styles.SubtitleStyle.Render("Examples:") + "\n" + exampleText)
 
-	content += "\n\n" + styles.HelpStyle.Render("enter: save changes • tab: switch fields • esc: cancel")
-	return styles.DocStyle.Render(content)
+	// Help text
+	helpText := styles.HelpStyle.Render(
+		styles.KeyStyle.Render("enter") + ": save changes • " +
+			styles.KeyStyle.Render("tab") + ": switch fields • " +
+			styles.KeyStyle.Render("esc") + ": cancel",
+	)
+
+	return builder.
+		WithContent(nameField, dbType, connField, examples).
+		WithHelp(helpText).
+		Render()
 }

@@ -3,24 +3,22 @@ package views
 import (
 	"fmt"
 
-	"github.com/charmbracelet/lipgloss"
-
 	"github.com/dancaldera/dbx/internal/models"
 	"github.com/dancaldera/dbx/internal/styles"
 )
 
 // SchemaView renders the schema selection screen
 func SchemaView(m models.Model) string {
-	var content string
+	builder := NewViewBuilder()
 
+	// Add loading or empty state
 	if m.IsLoadingSchemas {
-		loadingMsg := "⏳ Loading schemas..."
-		content = m.SchemasList.View() + "\n" + loadingMsg
+		builder.WithStatus("⏳ Loading schemas...", StatusLoading)
 	} else if len(m.Schemas) == 0 {
-		emptyMsg := styles.InfoStyle.Render("🗂️ No additional schemas found.\n\nUsing default schema.")
-		content = m.SchemasList.View() + "\n" + emptyMsg
+		emptyState := RenderEmptyState("🗂️", "No additional schemas found.\n\nUsing default schema.")
+		builder.WithContent(m.SchemasList.View(), emptyState)
 	} else {
-		content = m.SchemasList.View()
+		builder.WithContent(m.SchemasList.View())
 	}
 
 	helpText := styles.HelpStyle.Render(
@@ -28,27 +26,23 @@ func SchemaView(m models.Model) string {
 			styles.KeyStyle.Render("esc") + ": back",
 	)
 
-	return styles.DocStyle.Render(content + "\n" + helpText)
+	return builder.WithHelp(helpText).Render()
 }
 
 // TablesView renders the tables listing screen
 func TablesView(m models.Model) string {
-	var elements []string
+	builder := NewViewBuilder()
 
 	if m.IsLoadingColumns {
-		loadingMsg := "⏳ Loading table columns..."
-		elements = append(elements, m.TablesList.View())
-		elements = append(elements, loadingMsg)
+		builder.WithStatus("⏳ Loading table columns...", StatusLoading).
+			WithContent(m.TablesList.View())
 	} else if len(m.Tables) == 0 {
-		emptyMsg := styles.InfoStyle.Render("📋 No tables found in this database.")
-		elements = append(elements, m.TablesList.View())
-		elements = append(elements, emptyMsg)
+		emptyState := RenderEmptyState("📋", "No tables found in this database.")
+		builder.WithContent(m.TablesList.View(), emptyState)
 	} else {
 		// Show tables list without success banner
-		elements = append(elements, m.TablesList.View())
+		builder.WithContent(m.TablesList.View())
 	}
-
-	content := lipgloss.JoinVertical(lipgloss.Left, elements...)
 
 	helpText := styles.HelpStyle.Render(
 		styles.KeyStyle.Render("enter") + ": preview data • " +
@@ -56,61 +50,66 @@ func TablesView(m models.Model) string {
 			styles.KeyStyle.Render("f") + ": relationships\n" +
 			styles.KeyStyle.Render("r") + ": run SQL queries • " +
 			styles.KeyStyle.Render("ctrl+h") + ": view query history • " +
-			styles.KeyStyle.Render("esc") + ": disconnect")
+			styles.KeyStyle.Render("esc") + ": disconnect",
+	)
 
-	return styles.DocStyle.Render(content + "\n" + helpText)
+	return builder.WithHelp(helpText).Render()
 }
 
 // ColumnsView renders the table columns display screen
 func ColumnsView(m models.Model) string {
-	content := styles.TitleStyle.Render(fmt.Sprintf("Columns of table: %s", m.SelectedTable)) + "\n\n"
-	content += m.ColumnsTable.View()
+	title := fmt.Sprintf("Columns of table: %s", m.SelectedTable)
 
 	helpText := styles.HelpStyle.Render(
 		styles.KeyStyle.Render("↑/↓") + ": navigate • " +
-			styles.KeyStyle.Render("esc") + ": back to tables")
+			styles.KeyStyle.Render("esc") + ": back to tables",
+	)
 
-	content += "\n" + helpText
-	return styles.DocStyle.Render(content)
+	return NewViewBuilder().
+		WithTitle(title).
+		WithContent(m.ColumnsTable.View()).
+		WithHelp(helpText).
+		Render()
 }
 
 // IndexesView renders the table indexes and constraints screen
 func IndexesView(m models.Model) string {
-	content := styles.TitleStyle.Render(fmt.Sprintf("🔑 Indexes & Constraints: %s", m.SelectedTable)) + "\n\n"
+	title := fmt.Sprintf("🔑 Indexes & Constraints: %s", m.SelectedTable)
+	builder := NewViewBuilder().WithTitle(title)
 
+	// Add error status if present
 	if m.Err != nil {
-		content += styles.ErrorStyle.Render("❌ "+m.Err.Error()) + "\n\n"
+		builder.WithStatus("❌ "+m.Err.Error(), StatusError)
 	}
 
-	// Show the indexes table
-	content += m.IndexesTable.View() + "\n\n"
-
-	// Help text
 	helpText := styles.HelpStyle.Render(
 		styles.KeyStyle.Render("↑/↓") + ": navigate • " +
 			styles.KeyStyle.Render("enter") + ": view details • " +
-			styles.KeyStyle.Render("esc") + ": back to columns")
+			styles.KeyStyle.Render("esc") + ": back to columns",
+	)
 
-	content += "\n" + helpText
-	return styles.DocStyle.Render(content)
+	return builder.
+		WithContent(m.IndexesTable.View()).
+		WithHelp(helpText).
+		Render()
 }
 
 // RelationshipsView renders the foreign key relationships screen
 func RelationshipsView(m models.Model) string {
-	content := styles.TitleStyle.Render("🔗 Foreign Key Relationships") + "\n\n"
+	builder := NewViewBuilder().WithTitle("🔗 Foreign Key Relationships")
 
+	// Add error status if present
 	if m.Err != nil {
-		content += styles.ErrorStyle.Render("❌ "+m.Err.Error()) + "\n\n"
+		builder.WithStatus("❌ "+m.Err.Error(), StatusError)
 	}
 
-	// Show the relationships table
-	content += m.RelationshipsTable.View() + "\n\n"
-
-	// Help text
 	helpText := styles.HelpStyle.Render(
 		styles.KeyStyle.Render("↑/↓") + ": navigate • " +
-			styles.KeyStyle.Render("esc") + ": back to tables")
+			styles.KeyStyle.Render("esc") + ": back to tables",
+	)
 
-	content += "\n" + helpText
-	return styles.DocStyle.Render(content)
+	return builder.
+		WithContent(m.RelationshipsTable.View()).
+		WithHelp(helpText).
+		Render()
 }

@@ -12,50 +12,50 @@ import (
 
 // QueryView renders the SQL query execution screen
 func QueryView(m models.Model) string {
-	title := styles.TitleStyle.Render("⚡  SQL Query Runner")
+	builder := NewViewBuilder().WithTitle("⚡  SQL Query Runner")
 
-	var messageContent string
+	// Add status messages
 	if m.IsExecutingQuery {
-		messageContent = "⏳ Executing query..."
+		builder.WithStatus("⏳ Executing query...", StatusLoading)
 	} else if m.IsExporting {
-		messageContent = "⏳ Exporting data..."
+		builder.WithStatus("⏳ Exporting data...", StatusLoading)
 	} else if m.Err != nil {
-		messageContent = styles.ErrorStyle.Render("❌ " + m.Err.Error())
+		builder.WithStatus("❌ "+m.Err.Error(), StatusError)
 	}
 
-	// Query input with enhanced styling
-	queryLabel := styles.SubtitleStyle.Render("💻 Enter SQL Query:")
-	var queryField string
-	if m.QueryInput.Focused() {
-		queryField = styles.InputFocusedStyle.Render(m.QueryInput.View())
-	} else {
-		queryField = styles.InputStyle.Render(m.QueryInput.View())
-	}
+	// Query input field
+	queryField := RenderInputField("💻 Enter SQL Query:", m.QueryInput.View(), m.QueryInput.Focused())
 
-	var resultContent string
+	// Assemble content elements
+	var contentElements []string
+	contentElements = append(contentElements, queryField)
+
+	// Add query results if present
 	if m.QueryResult != "" {
-		resultLabel := styles.SubtitleStyle.Render("Query Result:")
+		resultLabel := RenderSectionTitle("Query Result:")
 		resultText := styles.SuccessStyle.Render(m.QueryResult)
 
-		// Only show the table if it has both columns and rows, and they match
+		// Only show the table if it has both columns and rows
 		if len(m.QueryResultsTable.Columns()) > 0 && len(m.QueryResultsTable.Rows()) > 0 {
 			tableContent := styles.CardStyle.Render(m.QueryResultsTable.View())
-			resultContent = lipgloss.JoinVertical(lipgloss.Left, resultLabel, resultText, tableContent)
+			resultContent := lipgloss.JoinVertical(lipgloss.Left, resultLabel, resultText, tableContent)
+			contentElements = append(contentElements, resultContent)
 		} else {
-			resultContent = lipgloss.JoinVertical(lipgloss.Left, resultLabel, resultText)
+			resultContent := lipgloss.JoinVertical(lipgloss.Left, resultLabel, resultText)
+			contentElements = append(contentElements, resultContent)
 		}
 	}
 
-	// Examples in an info box
-	examples := styles.InfoStyle.Render(
+	// Examples box
+	examples := RenderInfoBox(
 		styles.SubtitleStyle.Render("💡 Examples:") + "\n" +
 			styles.KeyStyle.Render("SELECT") + " * FROM users LIMIT 10;\n" +
 			styles.KeyStyle.Render("INSERT") + " INTO users (name, email) VALUES ('John', 'john@example.com');\n" +
 			styles.KeyStyle.Render("UPDATE") + " users SET email = 'new@example.com' WHERE id = 1;\n" +
 			styles.KeyStyle.Render("DELETE") + " FROM users WHERE id = 1;",
 	)
+	contentElements = append(contentElements, examples)
 
-	// Help text with enhanced key styling
 	helpText := styles.HelpStyle.Render(
 		styles.KeyStyle.Render("Enter") + ": execute query • " +
 			styles.KeyStyle.Render("Tab") + ": switch focus • " +
@@ -65,35 +65,21 @@ func QueryView(m models.Model) string {
 			styles.KeyStyle.Render("Esc") + ": back to tables",
 	)
 
-	// Assemble content with proper spacing
-	var elements []string
-	elements = append(elements, title)
-
-	if messageContent != "" {
-		elements = append(elements, messageContent)
-	}
-
-	elements = append(elements, queryLabel, queryField)
-
-	if resultContent != "" {
-		elements = append(elements, resultContent)
-	}
-
-	elements = append(elements, examples, helpText)
-
-	content := lipgloss.JoinVertical(lipgloss.Left, elements...)
-	return styles.DocStyle.Render(content)
+	return builder.
+		WithContent(contentElements...).
+		WithHelp(helpText).
+		Render()
 }
 
 // QueryHistoryView renders the query history screen
 func QueryHistoryView(m models.Model) string {
-	var content string
+	builder := NewViewBuilder()
 
 	if len(m.QueryHistory) == 0 {
-		emptyMsg := styles.InfoStyle.Render("📝 No query history yet.\n\nExecute some queries to see them here!")
-		content = m.QueryHistoryList.View() + "\n" + emptyMsg
+		emptyState := RenderEmptyState("📝", "No query history yet.\n\nExecute some queries to see them here!")
+		builder.WithContent(m.QueryHistoryList.View(), emptyState)
 	} else {
-		content = m.QueryHistoryList.View()
+		builder.WithContent(m.QueryHistoryList.View())
 	}
 
 	helpText := styles.HelpStyle.Render(
@@ -102,7 +88,7 @@ func QueryHistoryView(m models.Model) string {
 			styles.KeyStyle.Render("esc") + ": back",
 	)
 
-	return styles.DocStyle.Render(content + "\n" + helpText)
+	return builder.WithHelp(helpText).Render()
 }
 
 // DataPreviewView renders the enhanced table data preview screen
