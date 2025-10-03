@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/table"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dancaldera/dbx/internal/database"
 	"github.com/dancaldera/dbx/internal/models"
 )
@@ -370,7 +370,7 @@ func HandleDataPreviewResult(m models.Model, msg models.DataPreviewResult) (mode
 
 	// Create the data preview table
 	updatedModel = CreateDataPreviewTable(updatedModel)
-	
+
 	// Switch to data preview view to show the table
 	updatedModel.State = models.DataPreviewView
 	return updatedModel, nil

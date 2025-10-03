@@ -25,14 +25,14 @@ func DBTypeView(m models.Model) string {
 func SavedConnectionsView(m models.Model) string {
 	// Create the main content area
 	listContent := m.SavedConnectionsList.View()
-	
+
 	// Build layout with elements
 	var elements []string
-	
+
 	// Build title with inline status/error
 	var titleLine string
 	baseTitle := "📋 Saved Connections"
-	
+
 	if m.IsConnecting {
 		// Show loading status inline with title using horizontal join
 		titlePart := styles.TitleStyle.Render(baseTitle)
@@ -61,15 +61,15 @@ func SavedConnectionsView(m models.Model) string {
 		// Just the title
 		titleLine = styles.TitleStyle.Render(baseTitle)
 	}
-	
+
 	elements = append(elements, titleLine)
-	
+
 	// Add spacing before the list
 	elements = append(elements, "")
-	
+
 	// Add the list
 	elements = append(elements, listContent)
-	
+
 	// Add empty state message if needed (but don't show list)
 	if len(m.SavedConnections) == 0 && !m.IsConnecting && m.Err == nil && m.QueryResult == "" {
 		elements = []string{titleLine, "", styles.InfoStyle.Render("📝 No saved connections yet.\n\nGo back and create your first connection!")}
