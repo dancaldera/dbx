@@ -95,16 +95,19 @@ func QueryHistoryView(m models.Model) string {
 func DataPreviewView(m models.Model) string {
 	// Enhanced title with table name
 	title := fmt.Sprintf("%s", m.SelectedTable)
-	content := styles.TitleStyle.Render(title)
+	builder := NewViewBuilder().WithTitle(title)
 
 	// Show status messages with improved styling
 	if m.IsExporting {
-		content += "\n" + styles.LoadingStyle.Render("⏳ Exporting data...")
+		builder.WithStatus("⏳ Exporting data...", StatusLoading)
 	} else if m.Err != nil {
-		content += "\n" + styles.ErrorStyle.Render("❌ Error: "+m.Err.Error())
+		builder.WithStatus("❌ Error: "+m.Err.Error(), StatusError)
 	} else if m.QueryResult != "" {
-		content += "\n" + styles.SuccessStyle.Render(m.QueryResult)
+		builder.WithStatus(m.QueryResult, StatusSuccess)
 	}
+
+	// Build content sections
+	var contentElements []string
 
 	// Only show the table if it has both columns and rows
 	if len(m.DataPreviewTable.Columns()) > 0 && len(m.DataPreviewTable.Rows()) > 0 {
@@ -157,7 +160,7 @@ func DataPreviewView(m models.Model) string {
 			statusLine.WriteString(fmt.Sprintf(" • %s %s", sortIcon, m.DataPreviewSortColumn))
 		}
 
-		content += "\n" + styles.InfoStyle.Render(statusLine.String())
+		contentElements = append(contentElements, styles.InfoStyle.Render(statusLine.String()))
 
 		// Enhanced column scroll indicator with scroll arrows
 		totalCols := len(m.DataPreviewAllColumns)
@@ -179,7 +182,7 @@ func DataPreviewView(m models.Model) string {
 		visibleRows := len(m.DataPreviewTable.Rows())
 		columnLine.WriteString(fmt.Sprintf(" • %d rows visible", visibleRows))
 
-		content += "\n" + styles.SubtitleStyle.Render(columnLine.String())
+		contentElements = append(contentElements, styles.SubtitleStyle.Render(columnLine.String()))
 
 		// Enhanced filter input with better styling
 		if m.DataPreviewFilterActive {
@@ -190,7 +193,7 @@ func DataPreviewView(m models.Model) string {
 			} else {
 				filterField = styles.InputStyle.Render(m.DataPreviewFilterInput.View())
 			}
-			content += "\n" + filterLabel + " " + filterField
+			contentElements = append(contentElements, filterLabel+" "+filterField)
 		}
 
 		// Enhanced sort mode indicator with clear navigation and state messaging
@@ -216,18 +219,18 @@ func DataPreviewView(m models.Model) string {
 				// No column selected yet - emphasize navigation
 				sortModeInfo = "🎯 Sort Mode: Use ↑/↓ to select column, then ENTER to sort"
 			}
-			content += "\n" + styles.WarningStyle.Render(sortModeInfo)
+			contentElements = append(contentElements, styles.WarningStyle.Render(sortModeInfo))
 		}
 
 		// Add visual separator before table
-		content += "\n" + strings.Repeat("─", 80)
-		content += "\n" + m.DataPreviewTable.View()
+		contentElements = append(contentElements, strings.Repeat("─", 80))
+		contentElements = append(contentElements, m.DataPreviewTable.View())
 
 		// Add visual separator after table for better separation
-		content += "\n" + strings.Repeat("─", 80)
+		contentElements = append(contentElements, strings.Repeat("─", 80))
 
 	} else if m.Err == nil && m.QueryResult == "" && !m.IsExporting {
-		content += "\n" + styles.InfoStyle.Render("📭 No data to display")
+		contentElements = append(contentElements, styles.InfoStyle.Render("📭 No data to display"))
 	}
 
 	// Enhanced help text with better grouping and visual hierarchy
@@ -254,15 +257,14 @@ func DataPreviewView(m models.Model) string {
 				featureHelp + " • " + utilityHelp)
 	}
 
-	content += "\n" + helpText
-	return styles.DocStyle.Render(content)
+	return builder.WithContent(contentElements...).WithHelp(helpText).Render()
 }
 
 // RowDetailView renders the detailed view of a selected row using a simple list
 func RowDetailView(m models.Model) string {
 	if m.IsViewingFieldDetail {
 		// Show full field detail view with scrolling
-		title := styles.TitleStyle.Render(fmt.Sprintf("Field: %s", m.SelectedFieldForDetail))
+		title := fmt.Sprintf("Field: %s", m.SelectedFieldForDetail)
 
 		// Find the selected field value
 		var fieldValue string
@@ -393,9 +395,11 @@ func RowDetailView(m models.Model) string {
 			scrollInfo += fmt.Sprintf(" • Column offset: %d", m.FieldDetailHorizontalOffset)
 		}
 
-		titleWithScroll := title
+		// Build with ViewBuilder
+		builder := NewViewBuilder().WithTitle(title)
+
 		if scrollInfo != "" {
-			titleWithScroll += styles.InfoStyle.Render(scrollInfo)
+			builder.WithStatus(scrollInfo, StatusInfo)
 		}
 
 		// Render with dynamic dimensions
@@ -407,56 +411,48 @@ func RowDetailView(m models.Model) string {
 				styles.KeyStyle.Render("esc") + ": back to field list",
 		)
 
-		content := titleWithScroll + "\n\n" + contentBox + "\n\n" + helpText
-
-		return styles.DocStyle.Render(content)
+		return builder.WithContent(contentBox).WithHelp(helpText).Render()
 	}
 
 	// Show field list view or edit mode
 	if m.IsEditingField {
 		// Show simplified field editing interface
 		title := fmt.Sprintf("Edit Field: %s", m.EditingFieldName)
-		content := styles.TitleStyle.Render(title) + "\n\n"
+		builder := NewViewBuilder().WithTitle(title)
 
 		// Show status messages
 		if m.Err != nil {
-			content += styles.ErrorStyle.Render("❌ "+m.Err.Error()) + "\n\n"
+			builder.WithStatus("❌ "+m.Err.Error(), StatusError)
 		} else if m.QueryResult != "" {
-			content += styles.SuccessStyle.Render(m.QueryResult) + "\n\n"
+			builder.WithStatus(m.QueryResult, StatusSuccess)
 		}
 
-		// Only show the textarea for editing
-		content += m.FieldTextarea.View() + "\n\n"
-
+		// Help text
 		helpText := styles.HelpStyle.Render(
 			styles.KeyStyle.Render("Ctrl+S") + ": save changes • " +
 				styles.KeyStyle.Render("Ctrl+K") + ": clear • " +
 				styles.KeyStyle.Render("Esc") + ": cancel",
 		)
-		content += helpText
 
-		return styles.DocStyle.Render(content)
+		return builder.WithContent(m.FieldTextarea.View()).WithHelp(helpText).Render()
 	}
 
+	// Default view: field list
 	title := fmt.Sprintf("Row Details - %s", m.SelectedTable)
-	content := styles.TitleStyle.Render(title) + "\n"
+	builder := NewViewBuilder().WithTitle(title)
 
 	if len(m.SelectedRowData) == 0 || len(m.DataPreviewAllColumns) == 0 {
-		content += styles.ErrorStyle.Render("❌ No row data available") + "\n\n"
+		builder.WithStatus("❌ No row data available", StatusError)
 		helpText := styles.HelpStyle.Render(styles.KeyStyle.Render("esc") + ": back to table")
-		content += helpText
-		return styles.DocStyle.Render(content)
+		return builder.WithHelp(helpText).Render()
 	}
 
 	// Show status messages
 	if m.Err != nil {
-		content += styles.ErrorStyle.Render("❌ "+m.Err.Error()) + "\n\n"
+		builder.WithStatus("❌ "+m.Err.Error(), StatusError)
 	} else if m.QueryResult != "" {
-		content += styles.SuccessStyle.Render(m.QueryResult) + "\n\n"
+		builder.WithStatus(m.QueryResult, StatusSuccess)
 	}
-
-	// Show the list of fields
-	content += m.RowDetailList.View()
 
 	// Add help text
 	helpText := styles.HelpStyle.Render(
@@ -465,9 +461,8 @@ func RowDetailView(m models.Model) string {
 			styles.KeyStyle.Render("e") + ": edit field • " +
 			styles.KeyStyle.Render("esc") + ": back to table",
 	)
-	content += "\n" + helpText
 
-	return styles.DocStyle.Render(content)
+	return builder.WithContent(m.RowDetailList.View()).WithHelp(helpText).Render()
 }
 
 func max(a, b int) int {

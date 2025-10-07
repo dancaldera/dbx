@@ -6,6 +6,22 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Spacing Standards:
+// -------------------
+// All views use the ViewBuilder pattern which automatically applies DocStyle (Margin: 1 top/bottom, 2 left/right)
+// This ensures consistent spacing across all views without manual margin management
+//
+// Standard margins/padding:
+// - DocStyle: Margin(1, 2) - Base container for all views
+// - HelpStyle: Margin(1, 0), Padding(0, 1) - Help text spacing
+// - TitleStyle: Padding(0, 1), Margin(0, 0, 1, 0) - Title with bottom margin
+// - SubtitleStyle: Margin(0, 0, 1, 0) - Section titles with bottom margin
+// - CardStyle: Padding(1, 2), Margin(0, 0, 1, 0) - Content containers
+// - InputStyle/InputFocusedStyle: Padding(0, 1), Margin(0, 0, 1, 0) - Form inputs
+// - Status styles (Error/Success/Warning/Info/Loading): Padding(0, 1) - Status messages
+//
+// All view functions should use ViewBuilder to ensure consistent application of these standards.
+
 // Global styles with blue theme
 var (
 	// Primary blue colors
