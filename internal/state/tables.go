@@ -2,8 +2,8 @@ package state
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dancaldera/dbx/internal/models"
-	"github.com/dancaldera/dbx/internal/utils"
+	"github.com/dancaldera/mirador/internal/models"
+	"github.com/dancaldera/mirador/internal/utils"
 )
 
 // HandleTablesViewUpdate handles all updates for the TablesView state.

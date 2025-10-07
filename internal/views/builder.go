@@ -2,7 +2,7 @@ package views
 
 import (
 	"github.com/charmbracelet/lipgloss"
-	"github.com/dancaldera/dbx/internal/styles"
+	"github.com/dancaldera/mirador/internal/styles"
 )
 
 // ViewBuilder provides a consistent way to build views with standard spacing and layout
@@ -71,8 +71,7 @@ func (vb *ViewBuilder) Render() string {
 		} else {
 			elements = append(elements, styles.TitleStyle.Render(vb.title))
 		}
-		// Add spacing after title
-		elements = append(elements, "")
+		// TitleStyle already has bottom margin, no need for extra empty line
 	}
 
 	// Add standalone status message if no title

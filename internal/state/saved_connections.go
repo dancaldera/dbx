@@ -5,9 +5,9 @@ import (
 
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dancaldera/dbx/internal/config"
-	"github.com/dancaldera/dbx/internal/models"
-	"github.com/dancaldera/dbx/internal/utils"
+	"github.com/dancaldera/mirador/internal/config"
+	"github.com/dancaldera/mirador/internal/models"
+	"github.com/dancaldera/mirador/internal/utils"
 )
 
 // HandleSavedConnectionsViewUpdate handles all updates for the SavedConnectionsView state.

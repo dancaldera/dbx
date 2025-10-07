@@ -94,7 +94,6 @@ var (
 			Foreground(LightGray).
 			Italic(true).
 			Margin(1, 0).
-			Border(TransparentBorder).
 			Padding(0, 1)
 
 	// Key binding help style
@@ -106,28 +105,24 @@ var (
 	ErrorStyle = lipgloss.NewStyle().
 			Foreground(ErrorRed).
 			Padding(0, 1).
-			Bold(true).
-			Border(TransparentBorder)
+			Bold(true)
 
 		// Success messages
 	SuccessStyle = lipgloss.NewStyle().
 			Foreground(SuccessGreen).
 			Padding(0, 1).
-			Bold(true).
-			Border(TransparentBorder)
+			Bold(true)
 
 		// Warning messages
 	WarningStyle = lipgloss.NewStyle().
 			Foreground(WarningOrange).
 			Padding(0, 1).
-			Bold(true).
-			Border(TransparentBorder)
+			Bold(true)
 
 		// Information boxes
 	InfoStyle = lipgloss.NewStyle().
 			Foreground(DarkBlue).
 			Padding(0, 1).
-			Border(TransparentBorder).
 			Margin(0)
 
 	// Table header style

@@ -1,11 +1,11 @@
-# DBX - Database Explorer
+# Mirador - Database Explorer
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go)](https://go.dev/dl/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-[![Go Report Card](https://goreportcard.com/badge/github.com/dancaldera/dbx)](https://goreportcard.com/report/github.com/dancaldera/dbx)
+[![Go Report Card](https://goreportcard.com/badge/github.com/dancaldera/mirador)](https://goreportcard.com/report/github.com/dancaldera/mirador)
 
-A terminal-based database explorer built with Go and Bubble Tea. DBX provides an interactive TUI for connecting to and exploring database structures across PostgreSQL, MySQL, and SQLite databases.
+A terminal-based database explorer built with Go and Bubble Tea. Mirador (Spanish for "viewpoint") provides an interactive TUI for connecting to and exploring database structures across PostgreSQL, MySQL, and SQLite databases.
 
 ## Features
 
@@ -21,7 +21,7 @@ A terminal-based database explorer built with Go and Bubble Tea. DBX provides an
 ## Architecture
 
 ```
-dbx/
+mirador/
 ├── main.go                     # Main entry point with update logic
 ├── internal/
 │   ├── config/                 # Configuration and file storage
@@ -32,7 +32,7 @@ dbx/
 │   └── views/                  # UI view rendering
 ```
 
-DBX follows a clean, modular architecture with well-separated concerns across configuration management, database operations, type definitions, UI styling, utility functions, and view rendering. The main application logic and Bubble Tea update handlers are implemented in `main.go` using the `appModel` wrapper pattern.
+Mirador follows a clean, modular architecture with well-separated concerns across configuration management, database operations, type definitions, UI styling, utility functions, and view rendering. The main application logic and Bubble Tea update handlers are implemented in `main.go` using the `appModel` wrapper pattern.
 
 ### Utils Package
 
@@ -54,16 +54,16 @@ The `utils` package provides centralized helper functions organized by domain:
 ### Build from source
 ```bash
 git clone <repository-url>
-cd dbx
+cd mirador
 go mod tidy
-go build -o dbx main.go
+go build -o mirador main.go
 ```
 
 ## Usage
 
 Run the application:
 ```bash
-./dbx
+./mirador
 ```
 
 Or run directly with Go:
@@ -174,11 +174,6 @@ username:password@tcp(localhost:3306)/database_name
 5. **Run Queries**: Execute custom SQL queries with formatted table results
 6. **Export Data**: Export query results or table previews to CSV/JSON format
 
-caldera/dbx/issues/new?template=feature_request.md) |
-| 💬 **Questions** | [GitHub Discussions](https://github.com/dancaldera/dbx/discussions) |
-| 📚 **Documentation** | [Wiki](https://github.com/dancaldera/dbx/wiki) |
-| ✨ **Community** | [Discord Server](https://discord.gg/dbx) |
-
 ---
 
 ## 📦 Database Features
@@ -218,15 +213,15 @@ caldera/dbx/issues/new?template=feature_request.md) |
 
 ```bash
 # Clone and setup
-git clone https://github.com/dancaldera/dbx.git
-cd dbx
+git clone https://github.com/dancaldera/mirador.git
+cd mirador
 go mod tidy
 
 # Run in development mode
 go run main.go
 
 # Build for production
-go build -o dbx main.go
+go build -o mirador main.go
 
 # Run tests
 go test ./...
@@ -240,7 +235,7 @@ go test ./...
 | `go fmt ./...` | Format code | Required before commit |
 | `go vet ./...` | Static analysis | Catches common errors |
 | `go test ./...` | Run tests | All tests must pass |
-| `go build` | Build binary | Creates `dbx` executable |
+| `go build` | Build binary | Creates `mirador` executable |
 | `go run main.go` | Development run | Hot reload for changes |
 
 ### 📝 Code Quality Standards
@@ -262,7 +257,7 @@ go test ./...
 
 ## 📦 Dependencies
 
-DBX is built on these excellent open-source libraries:
+Mirador is built on these excellent open-source libraries:
 
 ### 🎨 UI Framework
 - [🫧 Bubble Tea](https://github.com/charmbracelet/bubbletea) `v1.3.6` - TUI framework
@@ -289,8 +284,8 @@ We welcome contributions! Here's how to get started:
 
 1. **Fork & Clone**
    ```bash
-   git clone https://github.com/your-username/dbx.git
-   cd dbx
+   git clone https://github.com/your-username/mirador.git
+   cd mirador
    ```
 
 2. **Create Feature Branch**
@@ -311,7 +306,7 @@ We welcome contributions! Here's how to get started:
    ```
 
 5. **Submit Pull Request**
-   - Use our [PR template](https://github.com/dancaldera/dbx/blob/main/.github/pull_request_template.md)
+   - Use our PR template
    - Link related issues
    - Add screenshots for UI changes
 
@@ -324,8 +319,6 @@ We welcome contributions! Here's how to get started:
 | 🗄️ **Database Support** | New drivers, query features | 🔴 Advanced |
 | 📚 **Documentation** | Guides, examples, translations | 🟢 Beginner |
 | ⚡ **Performance** | Query optimization, caching | 🔴 Advanced |
-
-See our [Contributing Guide](CONTRIBUTING.md) for detailed information.
 
 ---
 
@@ -343,11 +336,11 @@ See [`LICENSE`](LICENSE) file for full details.
 
 ## ⭐ Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=dancaldera/dbx&type=Date)](https://star-history.com/#dancaldera/dbx&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=dancaldera/mirador&type=Date)](https://star-history.com/#dancaldera/mirador&Date)
 
 ### 🚀 Built with ❤️ by developers, for developers
 
-**[Website](https://dbx.dev)** • **[Documentation](https://docs.dbx.dev)** • **[Discord](https://discord.gg/dbx)** • **[Twitter](https://twitter.com/dbx_dev)**
+**Mirador** - *Your viewpoint into database exploration*
 
 *Made with ☕ and Go in 2025*
 

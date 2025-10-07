@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dancaldera/dbx/internal/models"
+	"github.com/dancaldera/mirador/internal/models"
 )
 
 // GetConfigDir returns the configuration directory for the application
@@ -18,7 +18,7 @@ func GetConfigDir() (string, error) {
 		return "", err
 	}
 
-	configDir := filepath.Join(homeDir, ".dbx")
+	configDir := filepath.Join(homeDir, ".mirador")
 	return configDir, os.MkdirAll(configDir, 0755)
 }
 

@@ -3,13 +3,13 @@ package views
 import (
 	"fmt"
 
-	"github.com/dancaldera/dbx/internal/models"
-	"github.com/dancaldera/dbx/internal/styles"
+	"github.com/dancaldera/mirador/internal/models"
+	"github.com/dancaldera/mirador/internal/styles"
 )
 
 // SchemaView renders the schema selection screen
 func SchemaView(m models.Model) string {
-	builder := NewViewBuilder()
+	builder := NewViewBuilder().WithTitle("🗂️ Select Schema")
 
 	// Add loading or empty state
 	if m.IsLoadingSchemas {
@@ -31,7 +31,7 @@ func SchemaView(m models.Model) string {
 
 // TablesView renders the tables listing screen
 func TablesView(m models.Model) string {
-	builder := NewViewBuilder()
+	builder := NewViewBuilder().WithTitle("📋 Available Tables")
 
 	if m.IsLoadingColumns {
 		builder.WithStatus("⏳ Loading table columns...", StatusLoading).

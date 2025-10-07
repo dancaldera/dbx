@@ -110,6 +110,7 @@ func (f FieldItem) FilterValue() string { return f.Name }
 
 // Main model
 type Model struct {
+	Version              string
 	State                ViewState
 	DBTypeList           list.Model
 	SavedConnectionsList list.Model

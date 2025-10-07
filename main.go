@@ -14,15 +14,15 @@ import (
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/dancaldera/dbx/internal/config"
-	"github.com/dancaldera/dbx/internal/models"
-	"github.com/dancaldera/dbx/internal/state"
-	"github.com/dancaldera/dbx/internal/styles"
-	"github.com/dancaldera/dbx/internal/utils"
-	"github.com/dancaldera/dbx/internal/views"
+	"github.com/dancaldera/mirador/internal/config"
+	"github.com/dancaldera/mirador/internal/models"
+	"github.com/dancaldera/mirador/internal/state"
+	"github.com/dancaldera/mirador/internal/styles"
+	"github.com/dancaldera/mirador/internal/utils"
+	"github.com/dancaldera/mirador/internal/views"
 )
 
-const version = "v0.2.0"
+const version = "v0.3.0"
 
 func initialModel() models.Model {
 	// Database types list
@@ -41,6 +41,7 @@ func initialModel() models.Model {
 	ls.Title = styles.ListTitleStyle
 	ls.TitleBar = lipgloss.NewStyle()
 	dbList.Styles = ls
+	dbList.SetShowTitle(false) // Hide internal title, use ViewBuilder title instead
 	dbList.SetShowStatusBar(false)
 	dbList.SetFilteringEnabled(false)
 	dbList.SetShowHelp(false)
@@ -52,12 +53,13 @@ func initialModel() models.Model {
 	queryHistory, _ := config.LoadQueryHistory()
 
 	// Saved connections list
-	savedConnectionsList := list.New([]list.Item{}, styles.GetBlueListDelegate(), 50, 20)
+	savedConnectionsList := list.New([]list.Item{}, styles.GetBlueListDelegate(), 0, 0)
 	savedConnectionsList.Title = "Saved Connections"
 	scLS := list.DefaultStyles()
 	scLS.Title = styles.ListTitleStyle
 	scLS.TitleBar = lipgloss.NewStyle()
 	savedConnectionsList.Styles = scLS
+	savedConnectionsList.SetShowTitle(false) // Hide internal title, use ViewBuilder title instead
 	savedConnectionsList.SetShowStatusBar(false)
 	savedConnectionsList.SetFilteringEnabled(false)
 	savedConnectionsList.SetShowHelp(false)
@@ -111,6 +113,7 @@ func initialModel() models.Model {
 	tblLS.Title = styles.ListTitleStyle
 	tblLS.TitleBar = lipgloss.NewStyle()
 	tablesList.Styles = tblLS
+	tablesList.SetShowTitle(false) // Hide internal title, use ViewBuilder title instead
 	tablesList.SetShowStatusBar(false)
 	tablesList.SetFilteringEnabled(false)
 	tablesList.SetShowHelp(false)
@@ -122,6 +125,7 @@ func initialModel() models.Model {
 	qhLS.Title = styles.ListTitleStyle
 	qhLS.TitleBar = lipgloss.NewStyle()
 	queryHistoryList.Styles = qhLS
+	queryHistoryList.SetShowTitle(false) // Hide internal title, use ViewBuilder title instead
 	queryHistoryList.SetShowStatusBar(false)
 	queryHistoryList.SetFilteringEnabled(false)
 	queryHistoryList.SetShowHelp(false)
@@ -185,6 +189,7 @@ func initialModel() models.Model {
 	filterInput.Width = 60
 
 	m := models.Model{
+		Version:                 version,
 		State:                   models.DBTypeView,
 		DBTypeList:              dbList,
 		SavedConnectionsList:    savedConnectionsList,
@@ -307,10 +312,20 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height
-		h, v := styles.DocStyle.GetFrameSize()
-		m.DBTypeList.SetSize(msg.Width-h, msg.Height-v-5)
-		m.SavedConnectionsList.SetSize(msg.Width-h, msg.Height-v-5)
-		m.TablesList.SetSize(msg.Width-h, msg.Height-v-5)
+		h, _ := styles.DocStyle.GetFrameSize()
+
+		// Calculate proper list heights using ViewBuilder-aware function
+		dbTypeListHeight := utils.CalculateListViewportHeight(msg.Height, true, false)
+		m.DBTypeList.SetSize(msg.Width-h, dbTypeListHeight)
+
+		savedConnsListHeight := utils.CalculateListViewportHeight(msg.Height, true, m.IsConnecting || m.Err != nil || m.QueryResult != "")
+		m.SavedConnectionsList.SetSize(msg.Width-h, savedConnsListHeight)
+
+		tablesListHeight := utils.CalculateListViewportHeight(msg.Height, true, m.IsLoadingColumns)
+		m.TablesList.SetSize(msg.Width-h, tablesListHeight)
+
+		queryHistoryListHeight := utils.CalculateListViewportHeight(msg.Height, true, false)
+		m.QueryHistoryList.SetSize(msg.Width-h, queryHistoryListHeight)
 		// Resize RowDetailList when in RowDetailView state
 		if m.State == models.RowDetailView && len(m.RowDetailList.Items()) > 0 {
 			listHeight := utils.CalculateListViewportHeight(msg.Height, true, m.Err != nil || m.QueryResult != "")
@@ -322,6 +337,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.SearchInput.Width = msg.Width - h - 4
 
 		// Update textarea size for field editing
+		_, v := styles.DocStyle.GetFrameSize()
 		textareaWidth := utils.Max(msg.Width-h-4, 40)
 		textareaHeight := utils.Max(msg.Height-v-8, 5) // Reserve space for title and help text only
 		m.FieldTextarea.SetWidth(textareaWidth)
@@ -369,6 +385,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case models.EditConnectionView:
 				m.State = models.SavedConnectionsView
 				m.Err = nil
+				m.QueryResult = ""
+				m.IsConnecting = false
 				m.EditingConnectionIdx = -1
 				return m, nil
 			case models.TablesView:

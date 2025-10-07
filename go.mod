@@ -1,4 +1,4 @@
-module github.com/dancaldera/dbx
+module github.com/dancaldera/mirador
 
 go 1.24.5
 

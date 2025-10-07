@@ -2,8 +2,8 @@ package state
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dancaldera/dbx/internal/config"
-	"github.com/dancaldera/dbx/internal/models"
+	"github.com/dancaldera/mirador/internal/config"
+	"github.com/dancaldera/mirador/internal/models"
 )
 
 // HandleSaveConnectionViewUpdate handles all updates for the SaveConnectionView state.

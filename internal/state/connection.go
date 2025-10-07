@@ -4,9 +4,9 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dancaldera/dbx/internal/config"
-	"github.com/dancaldera/dbx/internal/models"
-	"github.com/dancaldera/dbx/internal/utils"
+	"github.com/dancaldera/mirador/internal/config"
+	"github.com/dancaldera/mirador/internal/models"
+	"github.com/dancaldera/mirador/internal/utils"
 )
 
 // HandleConnectionViewUpdate handles all updates for the ConnectionView state.

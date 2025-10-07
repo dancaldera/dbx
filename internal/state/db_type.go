@@ -2,9 +2,9 @@ package state
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dancaldera/dbx/internal/config"
-	"github.com/dancaldera/dbx/internal/models"
-	"github.com/dancaldera/dbx/internal/utils"
+	"github.com/dancaldera/mirador/internal/config"
+	"github.com/dancaldera/mirador/internal/models"
+	"github.com/dancaldera/mirador/internal/utils"
 )
 
 // HandleDBTypeViewUpdate handles all updates for the DBTypeView state.
@@ -28,6 +28,10 @@ func HandleDBTypeViewUpdate(m models.Model, msg tea.Msg) (models.Model, tea.Cmd)
 			if err == nil {
 				m.SavedConnections = connections
 			}
+			// Clear any lingering status messages from previous views
+			m.Err = nil
+			m.QueryResult = ""
+			m.IsConnecting = false
 			m = utils.UpdateSavedConnectionsList(m)
 			return m, nil
 

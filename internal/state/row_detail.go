@@ -4,9 +4,9 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dancaldera/dbx/internal/models"
-	"github.com/dancaldera/dbx/internal/styles"
-	"github.com/dancaldera/dbx/internal/utils"
+	"github.com/dancaldera/mirador/internal/models"
+	"github.com/dancaldera/mirador/internal/styles"
+	"github.com/dancaldera/mirador/internal/utils"
 )
 
 // HandleRowDetailViewUpdate handles all updates for the RowDetailView state.

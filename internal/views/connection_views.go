@@ -3,8 +3,8 @@ package views
 import (
 	"fmt"
 
-	"github.com/dancaldera/dbx/internal/models"
-	"github.com/dancaldera/dbx/internal/styles"
+	"github.com/dancaldera/mirador/internal/models"
+	"github.com/dancaldera/mirador/internal/styles"
 )
 
 // DBTypeView renders the database type selection screen
@@ -16,6 +16,7 @@ func DBTypeView(m models.Model) string {
 	)
 
 	return NewViewBuilder().
+		WithTitle("Mirador — Database Explorer " + m.Version).
 		WithContent(m.DBTypeList.View()).
 		WithHelp(helpText).
 		Render()

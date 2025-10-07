@@ -4,8 +4,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dancaldera/dbx/internal/database"
-	"github.com/dancaldera/dbx/internal/models"
+	"github.com/dancaldera/mirador/internal/database"
+	"github.com/dancaldera/mirador/internal/models"
 )
 
 // ClearResultAfterTimeout returns a command to clear result messages after 3 seconds

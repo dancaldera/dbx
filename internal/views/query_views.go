@@ -6,9 +6,9 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/dancaldera/dbx/internal/models"
-	"github.com/dancaldera/dbx/internal/styles"
-	"github.com/dancaldera/dbx/internal/utils"
+	"github.com/dancaldera/mirador/internal/models"
+	"github.com/dancaldera/mirador/internal/styles"
+	"github.com/dancaldera/mirador/internal/utils"
 )
 
 // QueryView renders the SQL query execution screen
@@ -80,7 +80,7 @@ func QueryView(m models.Model) string {
 
 // QueryHistoryView renders the query history screen
 func QueryHistoryView(m models.Model) string {
-	builder := NewViewBuilder()
+	builder := NewViewBuilder().WithTitle("📝 Query History")
 
 	if len(m.QueryHistory) == 0 {
 		emptyState := RenderEmptyState("📝", "No query history yet.\n\nExecute some queries to see them here!")
@@ -100,8 +100,8 @@ func QueryHistoryView(m models.Model) string {
 
 // DataPreviewView renders the enhanced table data preview screen
 func DataPreviewView(m models.Model) string {
-	// Enhanced title with table name
-	title := fmt.Sprintf("%s", m.SelectedTable)
+	// Enhanced title with table name and row count
+	title := fmt.Sprintf("📋 %s (%d rows)", m.SelectedTable, m.DataPreviewTotalRows)
 	builder := NewViewBuilder().WithTitle(title)
 
 	// Show status messages with improved styling
@@ -129,33 +129,27 @@ func DataPreviewView(m models.Model) string {
 		startRow := (m.DataPreviewCurrentPage * m.DataPreviewItemsPerPage) + 1
 		endRow := startRow + len(m.DataPreviewTable.Rows()) - 1
 
-		// Enhanced table metadata with better visual hierarchy
-		var statusLine strings.Builder
+		// Build compact metadata block
+		var metadata strings.Builder
 
-		// Table name and filter status
-		if m.DataPreviewFilterValue != "" {
-			statusLine.WriteString(fmt.Sprintf("📋 %s (filtered: '%s')", m.SelectedTable, m.DataPreviewFilterValue))
-		} else {
-			statusLine.WriteString(fmt.Sprintf("📋 %s", m.SelectedTable))
-		}
+		// Row range information
+		metadata.WriteString(fmt.Sprintf("Rows %d-%d of %d", startRow, endRow, m.DataPreviewTotalRows))
 
-		// Row information with visual indicators
-		statusLine.WriteString(fmt.Sprintf(" • 📄 Rows %d-%d of %d", startRow, endRow, m.DataPreviewTotalRows))
-
-		// Page navigation with arrows
+		// Page navigation
 		if totalPages > 1 {
-			var pageIndicator string
-			if currentPage > 1 {
-				pageIndicator += "← "
-			}
-			pageIndicator += fmt.Sprintf("Page %d/%d", currentPage, totalPages)
-			if currentPage < totalPages {
-				pageIndicator += " →"
-			}
-			statusLine.WriteString(" • " + pageIndicator)
+			metadata.WriteString(fmt.Sprintf(" • Page %d/%d", currentPage, totalPages))
 		}
 
-		// Sort status with enhanced indicators
+		// Column scroll indicator
+		totalCols := len(m.DataPreviewAllColumns)
+		startCol := m.DataPreviewScrollOffset + 1
+		endCol := m.DataPreviewScrollOffset + m.DataPreviewVisibleCols
+		if endCol > totalCols {
+			endCol = totalCols
+		}
+		metadata.WriteString(fmt.Sprintf(" • Columns %d-%d of %d", startCol, endCol, totalCols))
+
+		// Sort indicator
 		if m.DataPreviewSortColumn != "" {
 			var sortIcon string
 			switch m.DataPreviewSortDirection {
@@ -164,32 +158,16 @@ func DataPreviewView(m models.Model) string {
 			case models.SortDesc:
 				sortIcon = "🔽"
 			}
-			statusLine.WriteString(fmt.Sprintf(" • %s %s", sortIcon, m.DataPreviewSortColumn))
+			metadata.WriteString(fmt.Sprintf(" • %s %s", sortIcon, m.DataPreviewSortColumn))
 		}
 
-		contentElements = append(contentElements, styles.InfoStyle.Render(statusLine.String()))
-
-		// Enhanced column scroll indicator with scroll arrows
-		totalCols := len(m.DataPreviewAllColumns)
-		startCol := m.DataPreviewScrollOffset + 1
-		endCol := m.DataPreviewScrollOffset + m.DataPreviewVisibleCols
-		if endCol > totalCols {
-			endCol = totalCols
+		// Filter indicator
+		if m.DataPreviewFilterValue != "" {
+			metadata.WriteString(fmt.Sprintf(" • Filtered: '%s'", m.DataPreviewFilterValue))
 		}
 
-		var columnLine strings.Builder
-		if m.DataPreviewScrollOffset > 0 {
-			columnLine.WriteString("← ")
-		}
-		columnLine.WriteString(fmt.Sprintf("Columns %d-%d of %d", startCol, endCol, totalCols))
-		if endCol < totalCols {
-			columnLine.WriteString(" →")
-		}
-
-		visibleRows := len(m.DataPreviewTable.Rows())
-		columnLine.WriteString(fmt.Sprintf(" • %d rows visible", visibleRows))
-
-		contentElements = append(contentElements, styles.SubtitleStyle.Render(columnLine.String()))
+		// Add metadata as single compact line
+		contentElements = append(contentElements, styles.SubtitleStyle.Render(metadata.String()))
 
 		// Enhanced filter input with better styling
 		if m.DataPreviewFilterActive {
@@ -229,12 +207,8 @@ func DataPreviewView(m models.Model) string {
 			contentElements = append(contentElements, styles.WarningStyle.Render(sortModeInfo))
 		}
 
-		// Add visual separator before table
-		contentElements = append(contentElements, strings.Repeat("─", 80))
+		// Add table directly without separators (table has its own borders)
 		contentElements = append(contentElements, m.DataPreviewTable.View())
-
-		// Add visual separator after table for better separation
-		contentElements = append(contentElements, strings.Repeat("─", 80))
 
 	} else if m.Err == nil && m.QueryResult == "" && !m.IsExporting {
 		contentElements = append(contentElements, styles.InfoStyle.Render("📭 No data to display"))

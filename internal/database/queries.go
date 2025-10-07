@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dancaldera/dbx/internal/models"
+	"github.com/dancaldera/mirador/internal/models"
 )
 
 // GetTables retrieves all tables from the database
