@@ -22,7 +22,7 @@ import (
 	"github.com/dancaldera/dbx/internal/views"
 )
 
-const version = "v0.1.0"
+const version = "v0.2.0"
 
 func initialModel() models.Model {
 	// Database types list
@@ -497,6 +497,12 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case models.DataPreviewView:
 		// Handle 'enter' key separately to avoid dependency cycle with private fieldItemDelegate
 		if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "enter" {
+			// If in sort mode or filter mode, let the state handler manage it
+			if m.DataPreviewSortMode || m.DataPreviewFilterActive {
+				updatedModel, cmd := state.HandleDataPreviewViewUpdate(m.Model, msg)
+				m.Model = updatedModel
+				return m, cmd
+			}
 			// Enter row detail view
 			if len(m.DataPreviewAllRows) > 0 {
 				selectedRow := m.DataPreviewTable.Cursor()

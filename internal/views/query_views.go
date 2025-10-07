@@ -193,27 +193,28 @@ func DataPreviewView(m models.Model) string {
 			content += "\n" + filterLabel + " " + filterField
 		}
 
-		// Enhanced sort mode indicator with column highlighting
+		// Enhanced sort mode indicator with clear navigation and state messaging
 		if m.DataPreviewSortMode {
 			var sortModeInfo string
 			if m.DataPreviewSortColumn != "" {
-				currentDirection := "off"
-				nextDirection := "ascending"
+				// A column is selected - show its current state and next action
 				switch m.DataPreviewSortDirection {
 				case models.SortOff:
-					currentDirection = "off"
-					nextDirection = "ascending"
+					// Column selected but not sorted yet
+					sortModeInfo = fmt.Sprintf("🎯 Sort Mode: '%s' → Press ENTER to sort ascending (↑/↓ to change column)",
+						m.DataPreviewSortColumn)
 				case models.SortAsc:
-					currentDirection = "ascending 🔼"
-					nextDirection = "descending"
+					// Currently sorted ascending
+					sortModeInfo = fmt.Sprintf("🎯 Sort Mode: '%s' 🔼 ascending → Press ENTER for descending (↑/↓ to change column)",
+						m.DataPreviewSortColumn)
 				case models.SortDesc:
-					currentDirection = "descending 🔽"
-					nextDirection = "off"
+					// Currently sorted descending
+					sortModeInfo = fmt.Sprintf("🎯 Sort Mode: '%s' 🔽 descending → Press ENTER to clear sort (↑/↓ to change column)",
+						m.DataPreviewSortColumn)
 				}
-				sortModeInfo = fmt.Sprintf("🎯 Sort Mode: '%s' (%s) → Press ENTER for %s",
-					m.DataPreviewSortColumn, currentDirection, nextDirection)
 			} else {
-				sortModeInfo = "🎯 Sort Mode: Use ↑/↓ to select column, ENTER to sort"
+				// No column selected yet - emphasize navigation
+				sortModeInfo = "🎯 Sort Mode: Use ↑/↓ to select column, then ENTER to sort"
 			}
 			content += "\n" + styles.WarningStyle.Render(sortModeInfo)
 		}

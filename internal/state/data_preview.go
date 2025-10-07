@@ -122,9 +122,8 @@ func HandleDataPreviewViewUpdate(m models.Model, msg tea.Msg) (models.Model, tea
 				return m, nil // No columns to sort
 			}
 			m.DataPreviewSortMode = true
-			if m.DataPreviewSortColumn == "" && len(m.DataPreviewAllColumns) > 0 {
-				m.DataPreviewSortColumn = m.DataPreviewAllColumns[0] // Default to first column
-			}
+			// Don't auto-select a column if nothing is currently sorted
+			// This makes the initial state clearer for navigation
 			return m, nil
 		case "ctrl+r":
 			// Reload/refresh data preview
