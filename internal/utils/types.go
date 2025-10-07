@@ -81,3 +81,84 @@ func SanitizeValueForDisplay(value string) string {
 func TruncateWithEllipsis(value string, budget int, ellipsis string) string {
 	return ansi.Truncate(value, budget, ellipsis)
 }
+
+// FormatFieldValue formats field values for display, with special handling for JSON
+func FormatFieldValue(value string) string {
+	// Try to format JSON for better readability
+	trimmed := strings.TrimSpace(value)
+	if !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[") {
+		// Not JSON, return as-is
+		return value
+	}
+
+	// Pretty-print JSON
+	var formatted strings.Builder
+	indent := 0
+	inString := false
+	escaped := false
+
+	for i, char := range value {
+		if escaped {
+			formatted.WriteRune(char)
+			escaped = false
+			continue
+		}
+
+		if char == '\\' && inString {
+			formatted.WriteRune(char)
+			escaped = true
+			continue
+		}
+
+		if char == '"' {
+			inString = !inString
+			formatted.WriteRune(char)
+			continue
+		}
+
+		if inString {
+			formatted.WriteRune(char)
+			continue
+		}
+
+		switch char {
+		case '{', '[':
+			formatted.WriteRune(char)
+			formatted.WriteRune('\n')
+			indent++
+			for j := 0; j < indent*2; j++ {
+				formatted.WriteRune(' ')
+			}
+		case '}', ']':
+			if i > 0 && value[i-1] != '\n' {
+				formatted.WriteRune('\n')
+			}
+			indent--
+			for j := 0; j < indent*2; j++ {
+				formatted.WriteRune(' ')
+			}
+			formatted.WriteRune(char)
+			if i < len(value)-1 {
+				formatted.WriteRune('\n')
+				for j := 0; j < indent*2; j++ {
+					formatted.WriteRune(' ')
+				}
+			}
+		case ',':
+			formatted.WriteRune(char)
+			formatted.WriteRune('\n')
+			for j := 0; j < indent*2; j++ {
+				formatted.WriteRune(' ')
+			}
+		case ':':
+			formatted.WriteRune(char)
+			formatted.WriteRune(' ')
+		default:
+			if char != ' ' || formatted.Len() == 0 || formatted.String()[formatted.Len()-1] != ' ' {
+				formatted.WriteRune(char)
+			}
+		}
+	}
+
+	return formatted.String()
+}

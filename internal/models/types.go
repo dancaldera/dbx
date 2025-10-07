@@ -227,6 +227,9 @@ type Model struct {
 	DataPreviewSortColumn    string        // Column to sort by
 	DataPreviewSortDirection SortDirection // Current sort direction
 	DataPreviewSortMode      bool          // Whether in column selection mode for sorting
+
+	// Help menu toggle
+	ShowFullHelp bool // Whether to show full help menu or compact version
 }
 
 // Message types for Bubble Tea

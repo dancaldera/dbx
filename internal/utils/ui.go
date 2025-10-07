@@ -329,3 +329,35 @@ func UpdateSavedConnectionsItems(connections []models.SavedConnection) []list.It
 	}
 	return items
 }
+
+// CalculateListViewportHeight calculates the appropriate height for list components
+// accounting for ViewBuilder-applied margins, title, status, and help text
+func CalculateListViewportHeight(totalHeight int, hasTitle bool, hasStatus bool) int {
+	_, v := styles.DocStyle.GetFrameSize()
+
+	// Start with total height minus DocStyle frame
+	availableHeight := totalHeight - v
+
+	// Account for title (1-2 lines with margin)
+	if hasTitle {
+		availableHeight -= 3
+	}
+
+	// Account for status message (1-2 lines if present)
+	if hasStatus {
+		availableHeight -= 2
+	}
+
+	// Account for help text (1 line with margin)
+	availableHeight -= 3
+
+	// Account for additional spacing and margins
+	availableHeight -= 2
+
+	// Ensure minimum height
+	if availableHeight < 5 {
+		availableHeight = 5
+	}
+
+	return availableHeight
+}

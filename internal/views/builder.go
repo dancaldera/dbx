@@ -147,3 +147,14 @@ func RenderInfoBox(content string) string {
 func RenderEmptyState(icon, message string) string {
 	return styles.InfoStyle.Render(icon + " " + message)
 }
+
+// RenderContextualHelp renders help text that can be compact or expanded
+// baseHelp: minimal help shown by default (e.g., "? for help • esc: back")
+// fullHelp: complete help text shown when showFull is true
+// showFull: whether to show full help or compact version
+func RenderContextualHelp(baseHelp, fullHelp string, showFull bool) string {
+	if showFull {
+		return styles.HelpStyle.Render(fullHelp)
+	}
+	return styles.HelpStyle.Render(baseHelp)
+}

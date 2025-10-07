@@ -311,9 +311,10 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.DBTypeList.SetSize(msg.Width-h, msg.Height-v-5)
 		m.SavedConnectionsList.SetSize(msg.Width-h, msg.Height-v-5)
 		m.TablesList.SetSize(msg.Width-h, msg.Height-v-5)
-		// Only resize RowDetailList if it has been initialized
-		if len(m.RowDetailList.Items()) > 0 {
-			m.RowDetailList.SetSize(msg.Width-h, msg.Height-v-8)
+		// Resize RowDetailList when in RowDetailView state
+		if m.State == models.RowDetailView && len(m.RowDetailList.Items()) > 0 {
+			listHeight := utils.CalculateListViewportHeight(msg.Height, true, m.Err != nil || m.QueryResult != "")
+			m.RowDetailList.SetSize(msg.Width-h, listHeight)
 		}
 		m.TextInput.Width = msg.Width - h - 4
 		m.NameInput.Width = msg.Width - h - 4
@@ -345,6 +346,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Model = updatedModel
 				return m, cmd
 			}
+
+		case "?":
+			// Toggle full help menu globally across all views
+			m.ShowFullHelp = !m.ShowFullHelp
+			return m, nil
 
 		case "esc":
 			switch m.State {
@@ -526,10 +532,10 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.RowDetailList.SetFilteringEnabled(false)
 						// Hide built-in help to avoid duplicate help sections
 						m.RowDetailList.SetShowHelp(false)
-						// Size the list to available viewport immediately
-						h, v := styles.DocStyle.GetFrameSize()
-						// Reserve fewer lines so the title is visible and top items are not clipped
-						m.RowDetailList.SetSize(m.Width-h, m.Height-v-5)
+						// Size the list to available viewport using consistent height calculation
+						h, _ := styles.DocStyle.GetFrameSize()
+						listHeight := utils.CalculateListViewportHeight(m.Height, true, m.Err != nil || m.QueryResult != "")
+						m.RowDetailList.SetSize(m.Width-h, listHeight)
 						m.IsViewingFieldDetail = false
 
 						m.State = models.RowDetailView

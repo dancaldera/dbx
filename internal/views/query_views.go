@@ -8,6 +8,7 @@ import (
 
 	"github.com/dancaldera/dbx/internal/models"
 	"github.com/dancaldera/dbx/internal/styles"
+	"github.com/dancaldera/dbx/internal/utils"
 )
 
 // QueryView renders the SQL query execution screen
@@ -56,14 +57,20 @@ func QueryView(m models.Model) string {
 	)
 	contentElements = append(contentElements, examples)
 
-	helpText := styles.HelpStyle.Render(
-		styles.KeyStyle.Render("Enter") + ": execute query • " +
-			styles.KeyStyle.Render("Tab") + ": switch focus • " +
-			styles.KeyStyle.Render("↑/↓") + ": navigate results • " +
-			styles.KeyStyle.Render("Ctrl+E") + ": export CSV • " +
-			styles.KeyStyle.Render("Ctrl+J") + ": export JSON • " +
-			styles.KeyStyle.Render("Esc") + ": back to tables",
-	)
+	baseHelp := styles.KeyStyle.Render("?") + ": help • " +
+		styles.KeyStyle.Render("Enter") + ": execute • " +
+		styles.KeyStyle.Render("Tab") + ": switch focus • " +
+		styles.KeyStyle.Render("Esc") + ": back"
+
+	fullHelp := styles.KeyStyle.Render("Enter") + ": execute query • " +
+		styles.KeyStyle.Render("Tab") + ": switch focus • " +
+		styles.KeyStyle.Render("↑/↓") + ": navigate results • " +
+		styles.KeyStyle.Render("Ctrl+E") + ": export CSV • " +
+		styles.KeyStyle.Render("Ctrl+J") + ": export JSON • " +
+		styles.KeyStyle.Render("Esc") + ": back to tables • " +
+		styles.KeyStyle.Render("?") + ": hide help"
+
+	helpText := RenderContextualHelp(baseHelp, fullHelp, m.ShowFullHelp)
 
 	return builder.
 		WithContent(contentElements...).
@@ -245,16 +252,25 @@ func DataPreviewView(m models.Model) string {
 				styles.KeyStyle.Render("ENTER") + ": cycle sort (off→asc→desc) • " +
 				styles.KeyStyle.Render("ESC") + ": exit sort")
 	} else {
-		// Group help text by function for better readability
-		navigationHelp := styles.KeyStyle.Render("hjkl/↑↓←→") + ": navigate"
-		actionHelp := styles.KeyStyle.Render("ENTER") + ": row details"
-		pageHelp := styles.KeyStyle.Render("←→") + ": pages"
-		featureHelp := styles.KeyStyle.Render("/") + ": filter • " + styles.KeyStyle.Render("s") + ": sort"
-		utilityHelp := styles.KeyStyle.Render("ctrl+r") + ": reload • " + styles.KeyStyle.Render("ESC") + ": back"
+		// Compact help for normal mode
+		baseHelp := styles.KeyStyle.Render("?") + ": help • " +
+			styles.KeyStyle.Render("↑↓←→") + ": navigate • " +
+			styles.KeyStyle.Render("ENTER") + ": details • " +
+			styles.KeyStyle.Render("/") + ": filter • " +
+			styles.KeyStyle.Render("s") + ": sort • " +
+			styles.KeyStyle.Render("ESC") + ": back"
 
-		helpText = styles.HelpStyle.Render(
-			navigationHelp + " • " + actionHelp + " • " + pageHelp + "\n" +
-				featureHelp + " • " + utilityHelp)
+		// Full help with all options
+		fullHelp := styles.KeyStyle.Render("hjkl/↑↓←→") + ": navigate • " +
+			styles.KeyStyle.Render("ENTER") + ": row details • " +
+			styles.KeyStyle.Render("←→") + ": pages • " +
+			styles.KeyStyle.Render("/") + ": filter • " +
+			styles.KeyStyle.Render("s") + ": sort • " +
+			styles.KeyStyle.Render("ctrl+r") + ": reload • " +
+			styles.KeyStyle.Render("ESC") + ": back • " +
+			styles.KeyStyle.Render("?") + ": hide help"
+
+		helpText = RenderContextualHelp(baseHelp, fullHelp, m.ShowFullHelp)
 	}
 
 	return builder.WithContent(contentElements...).WithHelp(helpText).Render()
@@ -275,93 +291,32 @@ func RowDetailView(m models.Model) string {
 			}
 		}
 
-		// Show empty string as-is when value is empty
-
-		// Try to format JSON for better readability
-		if strings.HasPrefix(strings.TrimSpace(fieldValue), "{") || strings.HasPrefix(strings.TrimSpace(fieldValue), "[") {
-			// Attempt to pretty-print JSON
-			var formatted strings.Builder
-			indent := 0
-			inString := false
-			escaped := false
-
-			for i, char := range fieldValue {
-				if escaped {
-					formatted.WriteRune(char)
-					escaped = false
-					continue
-				}
-
-				if char == '\\' && inString {
-					formatted.WriteRune(char)
-					escaped = true
-					continue
-				}
-
-				if char == '"' {
-					inString = !inString
-					formatted.WriteRune(char)
-					continue
-				}
-
-				if inString {
-					formatted.WriteRune(char)
-					continue
-				}
-
-				switch char {
-				case '{', '[':
-					formatted.WriteRune(char)
-					formatted.WriteRune('\n')
-					indent++
-					for j := 0; j < indent*2; j++ {
-						formatted.WriteRune(' ')
-					}
-				case '}', ']':
-					if i > 0 && fieldValue[i-1] != '\n' {
-						formatted.WriteRune('\n')
-					}
-					indent--
-					for j := 0; j < indent*2; j++ {
-						formatted.WriteRune(' ')
-					}
-					formatted.WriteRune(char)
-					if i < len(fieldValue)-1 {
-						formatted.WriteRune('\n')
-						for j := 0; j < indent*2; j++ {
-							formatted.WriteRune(' ')
-						}
-					}
-				case ',':
-					formatted.WriteRune(char)
-					formatted.WriteRune('\n')
-					for j := 0; j < indent*2; j++ {
-						formatted.WriteRune(' ')
-					}
-				case ':':
-					formatted.WriteRune(char)
-					formatted.WriteRune(' ')
-				default:
-					if char != ' ' || formatted.Len() == 0 || formatted.String()[formatted.Len()-1] != ' ' {
-						formatted.WriteRune(char)
-					}
-				}
-			}
-			fieldValue = formatted.String()
-		}
+		// Format field value (handles JSON pretty-printing)
+		fieldValue = utils.FormatFieldValue(fieldValue)
 
 		// Split content into lines for scrolling
 		lines := strings.Split(fieldValue, "\n")
 
-		// Calculate dynamic height (use window height minus padding for title and help text)
-		availableHeight := max(m.Height-10, 5) // Reserve space for title, help text, and margins
+		// Calculate dynamic height accounting for ViewBuilder elements
+		// Title (2-3 lines), status (1-2 lines), help (1 line), margins
+		h, v := styles.DocStyle.GetFrameSize()
+		availableHeight := m.Height - v - 12 // Account for all UI elements
+		if availableHeight < 5 {
+			availableHeight = 5
+		}
 
 		// Calculate visible range
 		startLine := m.FieldDetailScrollOffset
 		endLine := min(startLine+availableHeight, len(lines))
 
 		// Calculate dynamic width (use window width minus padding)
-		availableWidth := min(max(m.Width-10, 40), 200) // Reserve space for margins
+		availableWidth := m.Width - h - 8 // Account for frame and padding
+		if availableWidth < 40 {
+			availableWidth = 40
+		}
+		if availableWidth > 200 {
+			availableWidth = 200
+		}
 
 		// Build visible content with horizontal scrolling
 		var visibleLines []string
@@ -438,7 +393,8 @@ func RowDetailView(m models.Model) string {
 	}
 
 	// Default view: field list
-	title := fmt.Sprintf("Row Details - %s", m.SelectedTable)
+	fieldCount := len(m.DataPreviewAllColumns)
+	title := fmt.Sprintf("Row Details - %s (%d fields)", m.SelectedTable, fieldCount)
 	builder := NewViewBuilder().WithTitle(title)
 
 	if len(m.SelectedRowData) == 0 || len(m.DataPreviewAllColumns) == 0 {

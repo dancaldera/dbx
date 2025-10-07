@@ -64,10 +64,17 @@ func HandleRowDetailViewUpdate(m models.Model, msg tea.Msg) (models.Model, tea.C
 						break
 					}
 				}
-				// Calculate max scroll based on field content and dynamic height
+				// Format field value same as in view (handles JSON formatting)
+				fieldValue = utils.FormatFieldValue(fieldValue)
+
+				// Calculate max scroll based on formatted field content and dynamic height
+				// Must match calculation in query_views.go
 				lines := len(strings.Split(fieldValue, "\n"))
-				availableHeight := m.Height - 10 // Same calculation as in view
-				availableHeight = max(availableHeight, 5)
+				_, v := styles.DocStyle.GetFrameSize()
+				availableHeight := m.Height - v - 12 // Same as view calculation
+				if availableHeight < 5 {
+					availableHeight = 5
+				}
 				maxScroll := lines - availableHeight
 				maxScroll = max(maxScroll, 0)
 				if m.FieldDetailScrollOffset < maxScroll {

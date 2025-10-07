@@ -44,14 +44,21 @@ func TablesView(m models.Model) string {
 		builder.WithContent(m.TablesList.View())
 	}
 
-	helpText := styles.HelpStyle.Render(
-		styles.KeyStyle.Render("enter") + ": preview data • " +
-			styles.KeyStyle.Render("v") + ": view columns • " +
-			styles.KeyStyle.Render("f") + ": relationships\n" +
-			styles.KeyStyle.Render("r") + ": run SQL queries • " +
-			styles.KeyStyle.Render("ctrl+h") + ": view query history • " +
-			styles.KeyStyle.Render("esc") + ": disconnect",
-	)
+	baseHelp := styles.KeyStyle.Render("?") + ": help • " +
+		styles.KeyStyle.Render("enter") + ": preview • " +
+		styles.KeyStyle.Render("v") + ": columns • " +
+		styles.KeyStyle.Render("r") + ": query • " +
+		styles.KeyStyle.Render("esc") + ": disconnect"
+
+	fullHelp := styles.KeyStyle.Render("enter") + ": preview data • " +
+		styles.KeyStyle.Render("v") + ": view columns • " +
+		styles.KeyStyle.Render("f") + ": relationships • " +
+		styles.KeyStyle.Render("r") + ": run SQL queries • " +
+		styles.KeyStyle.Render("ctrl+h") + ": view query history • " +
+		styles.KeyStyle.Render("esc") + ": disconnect • " +
+		styles.KeyStyle.Render("?") + ": hide help"
+
+	helpText := RenderContextualHelp(baseHelp, fullHelp, m.ShowFullHelp)
 
 	return builder.WithHelp(helpText).Render()
 }
